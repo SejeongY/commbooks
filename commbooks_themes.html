@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>커뮤니케이션북스의 주제들</title>
   <style>
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #f8f8fa; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #f5f0e6; }
     .container { position: relative; width: 100%; height: 100%; cursor: grab; }
     .container:active { cursor: grabbing; }
     #node-canvas { display: block; }
@@ -236,6 +236,18 @@
           drawNodes();
         });
       d3.select(canvas).call(zoom);
+
+      // 랜덤 초기 위치 설정 (보는 시점만 랜덤 이동)
+const maxPanX = width / 2;
+const maxPanY = height / 2;
+const randomPanX = (Math.random() - 0.5) * maxPanX * 3;
+const randomPanY = (Math.random() - 0.5) * maxPanY * 3;
+
+currentTransform = d3.zoomIdentity.translate(randomPanX, randomPanY);
+d3.select(canvas).call(zoom.transform, currentTransform);
+
+drawNodes();
+
       
       // 초기에는 패닝 범위가 설정되지 않았을 수 있으므로, 한번 그려줌.
       // 시뮬레이션 안정화 후 setPanningExtent가 호출되므로, 그 전까지는 자유롭게 패닝될 수 있음.
