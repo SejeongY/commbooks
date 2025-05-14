@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>커뮤니케이션북스의 주제들</title>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #f8f8fa; }
+    .container { position: relative; width: 100%; height: 100%; cursor: grab; }
+    .container:active { cursor: grabbing; }
+    #node-canvas { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container" id="container">
+    <canvas id="node-canvas"></canvas>
+  </div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    const pastelColors = [
+      "#FFCDD2", "#F8BBD0", "#E1BEE7", "#D1C4E9",
+      "#C5CAE9", "#BBDEFB", "#B3E5FC", "#B2EBF2",
+      "#B2DFDB", "#C8E6C9", "#DCEDC8", "#F0F4C3",
+      "#FFF9C4", "#FFECB3", "#FFE0B2", "#FFCCBC",
+      "#D7CCC8", "#CFD8DC", "#F5E0DC", "#E0E0E0"
+    ];
+
+    const FONT_SIZE = 11;
+    const PADDING_X = 10;
+    const PADDING_Y = 5;
+    const BORDER_RADIUS = 16;
+    const HOVER_SCALE = 1.2;
+    const SHADOW_BLUR = 5;
+    const SHADOW_OFFSET = 2;
+    const PAN_EXTENT_PADDING = 20; // ★ 패닝 범위 여유 공간 조정 (기존 50 -> 20)
+
+    d3.json("d3_nodes.json").then(data => {
+      data.nodes.forEach(node => {
+        node.url = `http://commbooks.com/도서-태그/${encodeURIComponent(node.name.replace(/\s+/g, '-'))}`;
+      });
+
+      const canvas = document.getElementById('node-canvas');
+      const ctx = canvas.getContext('2d');
+
+      let width = window.innerWidth;
+      let height = window.innerHeight;
+      let currentTransform = d3.zoomIdentity;
+      let hoveredNode = null;
+      let simulationEnded = false;
+      const stabilizationTime = 5000;
+
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.scale(dpr, dpr);
+
+      const color = d3.scaleOrdinal(pastelColors);
+
+      ctx.font = `${FONT_SIZE}px sans-serif`;
+      data.nodes.forEach(node => {
+        const textMetrics = ctx.measureText(node.name);
+        node.textWidth = textMetrics.width;
+        node.nodeWidth = node.textWidth + PADDING_X * 2;
+        node.nodeHeight = FONT_SIZE + PADDING_Y * 2;
+        node.collisionRadius = Math.max(node.nodeWidth, node.nodeHeight) / 2 + 5;
+      });
+
+      const simulation = d3.forceSimulation(data.nodes)
+        .alphaDecay(0.07)
+        .alpha(0.2)
+        .force("x", d3.forceX(width / 2).strength(0.25))
+        .force("y", d3.forceY(height / 2).strength(0.25))
+        .force("collide", d3.forceCollide(d => d.collisionRadius).strength(0.8))
+        .force("charge", d3.forceManyBody().strength(-30))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .on("tick", () => {
+  const boundaryRadius = Math.min(width, height) / 2 * 1.0;
+  const threshold = boundaryRadius * 1.2;
+  const strongPullStrength = 0.005;
+  const hardLimit = boundaryRadius * 12.5;  // 🔽 이거 안 적어서 안 된 겁니다.
+
+  data.nodes.forEach(d => {
+    const dx = d.x - width / 2;
+    const dy = d.y - height / 2;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Soft pull: threshold 바깥쪽만 당김
+    if (dist > threshold) {
+      const overshoot = dist - threshold;
+      const pull = strongPullStrength * overshoot;
+      d.vx -= (dx / dist) * pull;
+      d.vy -= (dy / dist) * pull;
+    }
+
+    // Hard clamp: 진짜 멀리 튄 애는 위치 강제 덮어씌움
+    if (dist > hardLimit) {
+      const scale = hardLimit / dist;
+      d.x = width / 2 + dx * scale;
+      d.y = height / 2 + dy * scale;
+      d.vx = 0;
+      d.vy = 0;
+    }
+  });
+
+  if (!simulationEnded) {
+    drawNodes();
+  }
+});
+
+
+      function drawRoundedRect(x, y, w, h, r, isHovered = false) {
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+
+        if (isHovered) {
+            ctx.shadowColor = "rgba(0,0,0,0.2)";
+            ctx.shadowBlur = SHADOW_BLUR * 1.5;
+            ctx.shadowOffsetX = SHADOW_OFFSET * 1.2;
+            ctx.shadowOffsetY = SHADOW_OFFSET * 1.2;
+        } else {
+            ctx.shadowColor = "rgba(0,0,0,0.1)";
+            ctx.shadowBlur = SHADOW_BLUR;
+            ctx.shadowOffsetX = SHADOW_OFFSET;
+            ctx.shadowOffsetY = SHADOW_OFFSET;
+        }
+        ctx.fill();
+        ctx.shadowColor = "transparent";
+      }
+
+      function drawNodes() {
+        ctx.clearRect(0, 0, width, height);
+        ctx.save();
+        ctx.translate(currentTransform.x, currentTransform.y);
+        ctx.scale(currentTransform.k, currentTransform.k);
+
+        data.nodes.forEach(d => {
+          if (d === hoveredNode) return; 
+          drawSingleNode(d, false);
+        });
+
+        if (hoveredNode) {
+          drawSingleNode(hoveredNode, true);
+        }
+        ctx.restore();
+      }
+      
+      function drawSingleNode(d, isHovered) {
+        let currentFontSize = FONT_SIZE;
+        let nodeDrawWidth = d.nodeWidth;
+        let nodeDrawHeight = d.nodeHeight;
+        let rectX = d.x - nodeDrawWidth / 2;
+        let rectY = d.y - nodeDrawHeight / 2;
+        let effectiveBorderRadius = BORDER_RADIUS;
+
+        if (isHovered) {
+            nodeDrawWidth *= HOVER_SCALE;
+            nodeDrawHeight *= HOVER_SCALE;
+            currentFontSize *= HOVER_SCALE * 0.9;
+            rectX = d.x - nodeDrawWidth / 2;
+            rectY = d.y - nodeDrawHeight / 2;
+            effectiveBorderRadius *= HOVER_SCALE * 0.8;
+        }
+
+        ctx.fillStyle = color(d.cluster);
+        drawRoundedRect(rectX, rectY, nodeDrawWidth, nodeDrawHeight, effectiveBorderRadius, isHovered);
+
+        ctx.fillStyle = "#333";
+        ctx.font = `${currentFontSize}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(d.name, d.x, d.y);
+      }
+
+      // --- 패닝 범위 계산 및 설정 함수 ---
+      function setPanningExtent() {
+        if (!data || !data.nodes || data.nodes.length === 0) {
+            zoom.translateExtent([
+                [width / 2 - Math.min(width, height) / 4, height / 2 - Math.min(width, height) / 4],
+                [width / 2 + Math.min(width, height) / 4, height / 2 + Math.min(width, height) / 4]
+            ]);
+            return;
+        }
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        data.nodes.forEach(d => {
+          // ★ 노드 자체의 실제 크기를 고려하여 바운딩 박스 계산
+          const nodeLeft = d.x - d.nodeWidth / 2;
+          const nodeRight = d.x + d.nodeWidth / 2;
+          const nodeTop = d.y - d.nodeHeight / 2;
+          const nodeBottom = d.y + d.nodeHeight / 2;
+
+          if (nodeLeft < minX) minX = nodeLeft;
+          if (nodeTop < minY) minY = nodeTop;
+          if (nodeRight > maxX) maxX = nodeRight;
+          if (nodeBottom > maxY) maxY = nodeBottom;
+        });
+        
+        if (minX === Infinity || minY === Infinity || maxX === -Infinity || maxY === -Infinity) {
+              zoom.translateExtent([
+                  [width / 2 - Math.min(width, height) / 4, height / 2 - Math.min(width, height) / 4],
+                  [width / 2 + Math.min(width, height) / 4, height / 2 + Math.min(width, height) / 4]
+              ]);
+            return;
+        }
+
+        const currentPanPadding = PAN_EXTENT_PADDING;
+
+        zoom.translateExtent([
+          [minX - currentPanPadding, minY - currentPanPadding],
+          [maxX + currentPanPadding, maxY + currentPanPadding]
+        ]);
+      }
+
+      setTimeout(() => {
+        simulation.alphaTarget(0).stop();
+        simulationEnded = true;
+        console.log("Force Simulation 정지 (고정)");
+        setPanningExtent(); 
+        drawNodes();
+      }, stabilizationTime);
+
+      const zoom = d3.zoom()
+        .scaleExtent([0.2, 2])
+        .on("zoom", (event) => {
+          currentTransform = event.transform;
+          drawNodes();
+        });
+      d3.select(canvas).call(zoom);
+      
+      // 초기에는 패닝 범위가 설정되지 않았을 수 있으므로, 한번 그려줌.
+      // 시뮬레이션 안정화 후 setPanningExtent가 호출되므로, 그 전까지는 자유롭게 패닝될 수 있음.
+      drawNodes(); 
+
+      canvas.addEventListener('mousemove', (event) => {
+        const [mx, my] = d3.pointer(event); 
+        const simX = currentTransform.invertX(mx);
+        const simY = currentTransform.invertY(my);
+        let newHoveredNode = null;
+
+        for (let i = data.nodes.length - 1; i >= 0; i--) {
+          const d = data.nodes[i];
+          const nodeLeft = d.x - d.nodeWidth / 2;
+          const nodeRight = d.x + d.nodeWidth / 2;
+          const nodeTop = d.y - d.nodeHeight / 2;
+          const nodeBottom = d.y + d.nodeHeight / 2;
+          if (simX >= nodeLeft && simX <= nodeRight && simY >= nodeTop && simY <= nodeBottom) {
+            newHoveredNode = d;
+            break;
+          }
+        }
+        if (hoveredNode !== newHoveredNode) {
+          hoveredNode = newHoveredNode;
+          canvas.style.cursor = hoveredNode ? 'pointer' : 'grab';
+          if (simulationEnded || hoveredNode) { 
+            drawNodes();
+          }
+        }
+      });
+
+      canvas.addEventListener('click', (event) => {
+        if (hoveredNode && hoveredNode.url) {
+          window.open(hoveredNode.url, '_blank');
+        }
+      });
+      
+      window.addEventListener('resize', () => {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        ctx.scale(dpr, dpr);
+
+        simulation.force("x", d3.forceX(width / 2).strength(0.2))
+                  .force("y", d3.forceY(height / 2).strength(0.2))
+                  .force("center", d3.forceCenter(width / 2, height / 2));
+        
+        if (!simulationEnded) {
+            simulation.alpha(0.3).restart(); 
+        }
+        setPanningExtent(); 
+        drawNodes();
+      });
+
+    }).catch(error => {
+      console.error("데이터 로딩 또는 처리 중 오류 발생:", error);
+    });
+  </script>
+</body>
+</html>
