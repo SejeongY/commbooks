@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>커뮤니케이션북스의 주제들 (3D)</title>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #f5f0e6; }
+    #graph-container { width: 100%; height: 100%; }
+    .node-tooltip {
+      position: absolute;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 5px;
+      border-radius: 3px;
+      pointer-events: none; /* crucial for mouse events to pass through to the canvas */
+      font-family: sans-serif;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="graph-container"></div>
+  <!-- Tooltip element -->
+  <div id="node-tooltip" class="node-tooltip" style="display: none;"></div>
+
+  <!-- ★★★ 수정된 Three.js 라이브러리 링크 (버전 지정 제거) ★★★ -->
+<!-- Three.js (jsDelivr) -->
+<!-- three.js (호환 안정 버전) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+
+<!-- 3d-force-graph (latest 안정 버전) -->
+<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.71.3/dist/3d-force-graph.min.js"></script>
+
+
+  <script>
+    const pastelColors = [
+      "#FFCDD2", "#F8BBD0", "#E1BEE7", "#D1C4E9",
+      "#C5CAE9", "#BBDEFB", "#B3E5FC", "#B2EBF2",
+      "#B2DFDB", "#C8E6C9", "#DCEDC8", "#F0F4C3",
+      "#FFF9C4", "#FFECB3", "#FFE0B2", "#FFCCBC",
+      "#D7CCC8", "#CFD8DC", "#F5E0DC", "#E0E0E0"
+    ];
+
+    const FONT_SIZE = 11;
+    const PADDING_X = 10;
+    const PADDING_Y = 5;
+    const BORDER_RADIUS = 16; // For canvas drawing
+    const HOVER_SCALE_FACTOR = 1.2; // For sprite scaling
+    const NODE_BASE_SCALE = 15; // Adjust this to control overall node size in 3D space
+
+    // Tooltip element
+    const tooltipElement = document.getElementById('node-tooltip');
+
+    // Function to draw rounded rect on canvas (used for sprite texture)
+    function drawRoundedRect(ctx, x, y, w, h, r, isHovered) {
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+
+        if (isHovered) {
+            ctx.shadowColor = "rgba(0,0,0,0.3)";
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetX = 3;
+            ctx.shadowOffsetY = 3;
+        } else {
+            ctx.shadowColor = "rgba(0,0,0,0.15)";
+            ctx.shadowBlur = 5;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+        }
+        ctx.fill();
+        ctx.shadowColor = "transparent"; // Reset shadow for text
+    }
+    
+    // Cache for node textures
+       // Cache for node textures
+       const textureCache = new Map();
+    // ★★★ 텍스처 해상도 배율 ★★★
+    const TEXTURE_RESOLUTION_SCALE = 2; // 1.5, 2, 2.5 등으로 조절해보세요.
+
+    function getNodeTexture(node, colorStr, isHovered = false) {
+        const cacheKey = `${node.id}-${colorStr}-${isHovered}-${TEXTURE_RESOLUTION_SCALE}`; // 캐시 키에 배율 포함
+        if (textureCache.has(cacheKey)) {
+            return textureCache.get(cacheKey);
+        }
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // 폰트 크기 및 패딩도 배율에 맞게 조정
+        let currentFontSize = FONT_SIZE * TEXTURE_RESOLUTION_SCALE;
+        let currentPaddingX = PADDING_X * TEXTURE_RESOLUTION_SCALE;
+        let currentPaddingY = PADDING_Y * TEXTURE_RESOLUTION_SCALE;
+        let currentBorderRadius = BORDER_RADIUS * TEXTURE_RESOLUTION_SCALE;
+
+        let text = node.id;
+
+        ctx.font = `${currentFontSize}px sans-serif`;
+        const textMetrics = ctx.measureText(text);
+        
+        let nodeContentWidth = textMetrics.width + currentPaddingX * 2;
+        let nodeContentHeight = currentFontSize + currentPaddingY * 2;
+
+        const hoverScaleEffect = isHovered ? HOVER_SCALE_FACTOR : 1;
+        // 호버 시 그림자 공간 등을 고려한 캔버스 크기. TEXTURE_RESOLUTION_SCALE은 이미 내부 요소에 적용됨.
+        // 그림자 등으로 인해 필요한 추가 공간도 고려해야 합니다.
+        // isHovered 시 그림자가 더 커지므로, 이를 위한 여백도 TEXTURE_RESOLUTION_SCALE을 곱해줍니다.
+        const shadowBlurEffect = (isHovered ? 8 : 5) * TEXTURE_RESOLUTION_SCALE;
+        const shadowOffsetEffect = (isHovered ? 3 : 2) * TEXTURE_RESOLUTION_SCALE;
+        const extraPaddingForShadow = Math.max(shadowBlurEffect + Math.abs(shadowOffsetEffect), 5 * TEXTURE_RESOLUTION_SCALE);
+
+
+        canvas.width = nodeContentWidth + extraPaddingForShadow * 2;
+        canvas.height = nodeContentHeight + extraPaddingForShadow * 2;
+        
+        // 실제 그리는 위치 (캔버스 중앙에 배치)
+        const drawX = extraPaddingForShadow;
+        const drawY = extraPaddingForShadow;
+
+        // 그림자 설정도 배율 적용
+        if (isHovered) {
+            ctx.shadowColor = "rgba(0,0,0,0.3)";
+            ctx.shadowBlur = 8 * TEXTURE_RESOLUTION_SCALE; // 8
+            ctx.shadowOffsetX = 3 * TEXTURE_RESOLUTION_SCALE; // 3
+            ctx.shadowOffsetY = 3 * TEXTURE_RESOLUTION_SCALE; // 3
+        } else {
+            ctx.shadowColor = "rgba(0,0,0,0.15)";
+            ctx.shadowBlur = 5 * TEXTURE_RESOLUTION_SCALE; // 5
+            ctx.shadowOffsetX = 2 * TEXTURE_RESOLUTION_SCALE; // 2
+            ctx.shadowOffsetY = 2 * TEXTURE_RESOLUTION_SCALE; // 2
+        }
+
+        ctx.fillStyle = colorStr;
+        // drawRoundedRect 함수 자체는 x,y,w,h,r을 받으므로, 전달하는 값들이 이미 스케일링된 값이어야 함.
+        // drawRoundedRect 내부에서 스케일링할 필요 없음.
+        drawRoundedRectInternal(ctx, drawX, drawY, nodeContentWidth, nodeContentHeight, currentBorderRadius); // isHovered 인자는 shadow 설정에만 사용
+
+        ctx.shadowColor = "transparent"; // 텍스트에는 그림자 적용 안 함
+
+        ctx.fillStyle = "#333";
+        ctx.font = `${currentFontSize}px sans-serif`; // 폰트 다시 설정 (shadow 설정 후 변경될 수 있음)
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, drawX + nodeContentWidth / 2, drawY + nodeContentHeight / 2);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+        // 밉맵 사용 여부 및 필터링 설정 (아래 2, 3번 항목 참조)
+        // texture.generateMipmaps = false; // 밉맵 끄기 (선명해질 수 있으나, 멀리서 깜빡일 수 있음)
+        // texture.minFilter = THREE.LinearFilter; // 또는 THREE.NearestFilter
+        // texture.magFilter = THREE.LinearFilter; // 또는 THREE.NearestFilter
+
+        textureCache.set(cacheKey, texture);
+        return texture;
+    }
+
+    // drawRoundedRect를 내부용으로 변경 (isHovered 인자 제거, shadow는 getNodeTexture에서 직접 설정)
+    function drawRoundedRectInternal(ctx, x, y, w, h, r) {
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+
+    fetch("tags_3d.json")
+      .then(res => res.json())
+      .then(data => {
+        // ★★★ 데이터 좌표 스케일링 팩터 ★★★
+        const COORDINATE_SCALE_FACTOR = 100; // 이 값을 조절해보세요 (예: 10, 20, 50, 100 등)
+
+        const nodes = data.map(d => ({
+          id: d.id,
+          name: d.id,
+          group: d.group,
+          // ★★★ 좌표 스케일링 적용 ★★★
+          fx: d.x * COORDINATE_SCALE_FACTOR,
+          fy: d.y * COORDINATE_SCALE_FACTOR,
+          fz: d.z * COORDINATE_SCALE_FACTOR,
+          url: `http://commbooks.com/도서-태그/${encodeURIComponent(d.id.replace(/\s+/g, '-'))}`,
+          val: 0.5
+        }));
+
+        const graphData = { nodes, links: [] }; // No links defined in this example, but structure needs it
+        let hoveredNode = null;
+
+        const Graph = ForceGraph3D()
+          (document.getElementById('graph-container'))
+          .graphData(graphData)
+          .nodeLabel(node => `<div style="color: #ccc;">${node.name}</div>`) // Basic tooltip
+          .nodeColor(node => pastelColors[node.group % pastelColors.length]) // Fallback color if sprite fails
+          .backgroundColor('#f5f0e6')
+          .enableNodeDrag(false) // Nodes are fixed
+          .nodeThreeObject(node => {
+            const colorStr = pastelColors[node.group % pastelColors.length];
+            const isHovered = hoveredNode === node;
+            
+            const material = new THREE.SpriteMaterial({
+                map: getNodeTexture(node, colorStr, isHovered),
+                transparent: true,
+                depthWrite: false, // Solves some transparency ordering issues with sprites
+            });
+            const sprite = new THREE.Sprite(material);
+
+            // Calculate sprite scale based on its canvas texture dimensions
+            const canvasForTexture = getNodeTexture(node, colorStr, isHovered).image; // Get the canvas
+            const spriteWidth = canvasForTexture.width;
+            const spriteHeight = canvasForTexture.height;
+            
+            let scale = NODE_BASE_SCALE * (isHovered ? HOVER_SCALE_FACTOR : 1);
+            sprite.scale.set(spriteWidth * scale / 100, spriteHeight * scale / 100, 1);
+
+
+            // Store original scale for hover toggling
+            sprite.userData = { node, baseScaleX: sprite.scale.x, baseScaleY: sprite.scale.y };
+            return sprite;
+          })
+          .onNodeHover(node => {
+            const GFG = Graph; // To access graph methods inside this scope
+            const container = document.getElementById('graph-container');
+            if (hoveredNode === node && node !== null) return; // No change or hovering off
+            
+            // Update hovered node texture
+            if (hoveredNode) { // De-highlight previous
+                const prevSprite = hoveredNode.__threeObj;
+                if (prevSprite) {
+                    const colorStr = pastelColors[hoveredNode.group % pastelColors.length];
+                    prevSprite.material.map = getNodeTexture(hoveredNode, colorStr, false);
+                    prevSprite.scale.set(prevSprite.userData.baseScaleX, prevSprite.userData.baseScaleY, 1);
+                }
+            }
+            
+            hoveredNode = node;
+
+            if (node) {
+                const currentSprite = node.__threeObj;
+                if (currentSprite) {
+                    const colorStr = pastelColors[node.group % pastelColors.length];
+                    currentSprite.material.map = getNodeTexture(node, colorStr, true);
+                    currentSprite.scale.set(
+                        currentSprite.userData.baseScaleX * HOVER_SCALE_FACTOR, 
+                        currentSprite.userData.baseScaleY * HOVER_SCALE_FACTOR, 
+                        1
+                    );
+                }
+                container.style.cursor = 'pointer';
+                tooltipElement.style.display = 'block';
+                tooltipElement.innerHTML = node.name;
+
+            } else {
+                container.style.cursor = 'grab';
+                tooltipElement.style.display = 'none';
+            }
+            GFG.renderer().domElement.addEventListener('mousemove', onMouseMoveTooltip, false);
+          })
+          .onNodeClick(node => {
+            if (node.url) {
+              window.open(node.url, '_blank');
+            }
+          })
+          // Performance: if nodes are static, cool down simulation quickly
+          .d3AlphaDecay(0.1) // Faster decay if no significant forces
+          .d3VelocityDecay(0.5); // Nodes settle faster
+
+
+        // Camera position
+        Graph.cameraPosition({ z: 250 }); // Adjust as needed based on your data's scale
+
+        // Add some lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        Graph.scene().add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        directionalLight.position.set(1, 1, 1);
+        Graph.scene().add(directionalLight);
+
+        // Tooltip positioning
+        function onMouseMoveTooltip(event) {
+            if (hoveredNode) {
+                tooltipElement.style.left = (event.clientX + 10) + 'px';
+                tooltipElement.style.top = (event.clientY + 10) + 'px';
+            } else {
+                tooltipElement.style.display = 'none';
+            }
+        }
+        // Initial call to position camera based on graph extent, after nodes are positioned
+        // For fixed nodes (fx, fy, fz), this happens quickly
+               // Initial call to position camera based on graph extent, after nodes are positioned
+               setTimeout(() => {
+            const { nodes: graphNodes } = Graph.graphData(); // 변수명 변경
+            if (graphNodes.length) {
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+                graphNodes.forEach(n => {
+                    minX = Math.min(minX, n.fx); maxX = Math.max(maxX, n.fx);
+                    minY = Math.min(minY, n.fy); maxY = Math.max(maxY, n.fy);
+                    minZ = Math.min(minZ, n.fz); maxZ = Math.max(maxZ, n.fz);
+                });
+
+                const centerX = (minX + maxX) / 2;
+                const centerY = (minY + maxY) / 2;
+                const centerZ = (minZ + maxZ) / 2;
+
+                const extentX = maxX - minX;
+                const extentY = maxY - minY;
+                const extentZ = maxZ - minZ; // Z축 분포도 고려
+
+                // 가장 넓은 축의 길이를 기준으로 카메라 거리를 계산
+                const maxExtent = Math.max(extentX, extentY, extentZ);
+
+                const camera = Graph.camera(); // 카메라 객체 가져오기
+                if (camera) {
+                    const cameraFOV = camera.fov; // 현재 카메라의 FOV (Field Of View)
+                    // FOV와 최대 분포 크기를 이용해 적절한 카메라 거리 계산
+                    // (화면에 전체 분포가 보이도록 하는 대략적인 계산)
+                    let camDistance = maxExtent / (2 * Math.tan(Math.PI * cameraFOV / 360));
+                    
+                    // 최소/최대 거리 제한 (선택적)
+                    camDistance = Math.max(camDistance, 100); // 너무 가까이 가지 않도록
+                    camDistance = Math.min(camDistance, 2000); // 너무 멀리 가지 않도록
+
+                    // ★★★ 카메라가 바라볼 지점 (lookAt)과 카메라 위치 설정 ★★★
+                    Graph.cameraPosition(
+                        { x: centerX, y: centerY, z: centerZ + camDistance * 1.2 }, // 카메라 위치 (Z축으로 조금 더 멀리)
+                        { x: centerX, y: centerY, z: centerZ }, // 바라볼 지점 (데이터의 중심)
+                        1000 // 애니메이션 시간 (ms)
+                    );
+                } else {
+                     console.warn("카메라 객체를 가져올 수 없어 자동 위치 조정을 생략합니다.");
+                     // 카메라 객체가 아직 준비되지 않았을 수 있으므로,
+                     // 기본 카메라 위치를 조금 더 멀리 설정해 볼 수 있습니다.
+                     Graph.cameraPosition({ z: 400 + Math.max(maxX-minX, maxY-minY, maxZ-minZ) });
+                }
+            } else {
+                // 노드가 없을 경우 기본 카메라 위치
+                Graph.cameraPosition({ x:0, y:0, z: 250 });
+            }
+        }, 1000); // Wait for initial rendering and node positioning
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            Graph.width(window.innerWidth);
+            Graph.height(window.innerHeight);
+        });
+
+    }).catch(error => {
+      console.error("데이터 로딩 또는 처리 중 오류 발생:", error);
+      const container = document.getElementById('graph-container');
+      container.innerHTML = `<p style="color: red; text-align: center; padding-top: 50px;">데이터 로딩 실패: ${error.message}</p>`;
+    });
+
+  </script>
+</body>
+</html>

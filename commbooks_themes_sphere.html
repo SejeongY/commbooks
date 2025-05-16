@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>커뮤니케이션북스의 주제들 (구체 위)</title>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #f5f0e6; }
+    #graph-container { width: 100%; height: 100%; }
+    .node-tooltip {
+      position: absolute;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 5px;
+      border-radius: 3px;
+      pointer-events: none;
+      font-family: sans-serif;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="graph-container"></div>
+  <div id="node-tooltip" class="node-tooltip" style="display: none;"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.71.3/dist/3d-force-graph.min.js"></script>
+
+  <script>
+    const pastelColors = [
+      "#FFCDD2", "#F8BBD0", "#E1BEE7", "#D1C4E9",
+      "#C5CAE9", "#BBDEFB", "#B3E5FC", "#B2EBF2",
+      "#B2DFDB", "#C8E6C9", "#DCEDC8", "#F0F4C3",
+      "#FFF9C4", "#FFECB3", "#FFE0B2", "#FFCCBC",
+      "#D7CCC8", "#CFD8DC", "#F5E0DC", "#E0E0E0"
+    ];
+
+    const FONT_SIZE = 10; // 구 표면에서는 노드가 작아 보일 수 있으므로 약간 줄이거나, TEXTURE_RESOLUTION_SCALE과 함께 조절
+    const PADDING_X = 8;
+    const PADDING_Y = 4;
+    const BORDER_RADIUS = 12;
+    const HOVER_SCALE_FACTOR = 1.2;
+    const NODE_BASE_SCALE = 10; // 구 표면에서는 노드 스케일 조정이 더 중요할 수 있음
+
+    const TEXTURE_RESOLUTION_SCALE = 1.5; // 화질 개선을 위해 (1.0이 기본)
+
+    const tooltipElement = document.getElementById('node-tooltip');
+    const textureCache = new Map();
+
+    function drawRoundedRectInternal(ctx, x, y, w, h, r) {
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    function getNodeTexture(node, colorStr, isHovered = false) {
+        const cacheKey = `${node.name}-${colorStr}-${isHovered}-${TEXTURE_RESOLUTION_SCALE}`; // node.id 대신 node.name (또는 고유 식별자)
+        if (textureCache.has(cacheKey)) {
+            return textureCache.get(cacheKey);
+        }
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let currentFontSize = FONT_SIZE * TEXTURE_RESOLUTION_SCALE;
+        let currentPaddingX = PADDING_X * TEXTURE_RESOLUTION_SCALE;
+        let currentPaddingY = PADDING_Y * TEXTURE_RESOLUTION_SCALE;
+        let currentBorderRadius = BORDER_RADIUS * TEXTURE_RESOLUTION_SCALE;
+        let text = node.name; // JSON 데이터의 'name' 사용
+
+        ctx.font = `${currentFontSize}px sans-serif`;
+        const textMetrics = ctx.measureText(text);
+        let nodeContentWidth = textMetrics.width + currentPaddingX * 2;
+        let nodeContentHeight = currentFontSize + currentPaddingY * 2;
+
+        const shadowBlurEffect = (isHovered ? 8 : 5) * TEXTURE_RESOLUTION_SCALE;
+        const shadowOffsetEffect = (isHovered ? 3 : 2) * TEXTURE_RESOLUTION_SCALE;
+        const extraPaddingForShadow = Math.max(shadowBlurEffect + Math.abs(shadowOffsetEffect), 5 * TEXTURE_RESOLUTION_SCALE);
+
+        canvas.width = nodeContentWidth + extraPaddingForShadow * 2;
+        canvas.height = nodeContentHeight + extraPaddingForShadow * 2;
+        
+        const drawX = extraPaddingForShadow;
+        const drawY = extraPaddingForShadow;
+
+        if (isHovered) {
+            ctx.shadowColor = "rgba(0,0,0,0.3)";
+            ctx.shadowBlur = 8 * TEXTURE_RESOLUTION_SCALE;
+            ctx.shadowOffsetX = 3 * TEXTURE_RESOLUTION_SCALE;
+            ctx.shadowOffsetY = 3 * TEXTURE_RESOLUTION_SCALE;
+        } else {
+            ctx.shadowColor = "rgba(0,0,0,0.15)";
+            ctx.shadowBlur = 5 * TEXTURE_RESOLUTION_SCALE;
+            ctx.shadowOffsetX = 2 * TEXTURE_RESOLUTION_SCALE;
+            ctx.shadowOffsetY = 2 * TEXTURE_RESOLUTION_SCALE;
+        }
+        ctx.fillStyle = colorStr;
+        drawRoundedRectInternal(ctx, drawX, drawY, nodeContentWidth, nodeContentHeight, currentBorderRadius);
+        ctx.shadowColor = "transparent";
+
+        ctx.fillStyle = "#333";
+        ctx.font = `${currentFontSize}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, drawX + nodeContentWidth / 2, drawY + nodeContentHeight / 2);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+        texture.generateMipmaps = false;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        textureCache.set(cacheKey, texture);
+        return texture;
+    }
+
+    fetch("d3_nodes.json") // 2D 데이터 JSON 파일
+      .then(res => res.json())
+      .then(jsonData => { // jsonData는 { "nodes": [...] } 형태
+        const rawNodes = jsonData.nodes;
+
+        if (!rawNodes || rawNodes.length === 0) {
+            console.error("No nodes found in JSON data.");
+            return;
+        }
+
+        // 1. 2D 좌표의 최소/최대값 찾기 (정규화를 위해)
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        rawNodes.forEach(n => {
+            if (n.x < minX) minX = n.x;
+            if (n.x > maxX) maxX = n.x;
+            if (n.y < minY) minY = n.y;
+            if (n.y > maxY) maxY = n.y;
+        });
+
+        const SPHERE_RADIUS = 150; // 구의 반지름 (조절 가능)
+        // 극점에서의 밀집 현상을 줄이기 위한 phi 범위 조정 (0 ~ PI 대신 약간 안쪽으로)
+        const PHI_MIN_FACTOR = 0.1; // 0.0 ~ 0.4 (0에 가까울수록 극점까지 사용)
+        const PHI_MAX_FACTOR = 0.9; // 0.6 ~ 1.0 (1에 가까울수록 극점까지 사용)
+
+        const processedNodes = rawNodes.map(d => {
+          const spherical = new THREE.Spherical();
+          spherical.radius = SPHERE_RADIUS;
+
+          // 2. 2D 좌표를 0~1 범위로 정규화
+          // x, y 범위가 0일 경우 (모든 점이 동일 위치) NaN 방지
+          const normX = (maxX - minX === 0) ? 0.5 : (d.x - minX) / (maxX - minX);
+          const normY = (maxY - minY === 0) ? 0.5 : (d.y - minY) / (maxY - minY);
+
+          // 3. 정규화된 좌표를 구면 각도로 매핑
+          // theta (방위각, 수평)는 0 ~ 2PI 범위로 매핑 (normX 사용)
+          spherical.theta = normX * 2 * Math.PI;
+          
+          // phi (극각, 수직)는 0 ~ PI 범위로 매핑 (normY 사용)
+          // 극점 밀집을 피하기 위해 약간의 여유를 둠 (PHI_MIN_FACTOR ~ PHI_MAX_FACTOR * PI)
+          spherical.phi = (PHI_MIN_FACTOR * Math.PI) + (normY * (PHI_MAX_FACTOR - PHI_MIN_FACTOR) * Math.PI);
+          // 또는 간단하게: spherical.phi = normY * Math.PI; (극점 밀집 가능성)
+
+
+          const position = new THREE.Vector3();
+          position.setFromSpherical(spherical);
+
+          return {
+            // id: d.id, // 원본 id 사용 가능
+            name: d.name, // 3d-force-graph의 id는 문자열이어야 하므로 name을 id로 사용하거나 문자열로 변환
+            id: String(d.id), // 또는 d.name을 id로 사용해도 됨. 고유해야 함.
+            group: d.cluster,
+            fx: position.x,
+            fy: position.y,
+            fz: position.z,
+            url: d.url,
+            val: 0.5 // 노드 크기 관련 값 (물리 시뮬레이션용, 여기서는 고정 위치라 큰 의미 없음)
+          };
+        });
+
+        const graphData = { nodes: processedNodes, links: [] };
+        let hoveredNode = null;
+
+        const Graph = ForceGraph3D()
+          (document.getElementById('graph-container'))
+          .graphData(graphData)
+          .nodeLabel(node => `<div style="color: #ccc;">${node.name}</div>`)
+          .backgroundColor('#f5f0e6')
+          .enableNodeDrag(false) // 구 표면에 고정
+          .nodeThreeObject(node => {
+            const colorStr = pastelColors[node.group % pastelColors.length];
+            const isHovered = hoveredNode === node;
+            
+            const texture = getNodeTexture(node, colorStr, isHovered);
+            const material = new THREE.SpriteMaterial({
+                map: texture,
+                transparent: true,
+                depthWrite: false,
+                sizeAttenuation: true // 거리에 따라 크기 조절 (false로 하면 항상 같은 픽셀 크기)
+            });
+            const sprite = new THREE.Sprite(material);
+
+            const canvasForTexture = texture.image;
+            let scale = NODE_BASE_SCALE * (isHovered ? HOVER_SCALE_FACTOR : 1);
+            
+            // sizeAttenuation: true 일 경우, 스케일은 3D 단위에 가깝게.
+            // 텍스처의 가로세로 비율을 유지하면서 scale 적용
+            const aspectRatio = canvasForTexture.width / canvasForTexture.height;
+            sprite.scale.set(scale * aspectRatio, scale, 1.0);
+
+            sprite.userData = { node, baseScaleX: sprite.scale.x, baseScaleY: sprite.scale.y, aspectRatio: aspectRatio };
+            return sprite;
+          })
+          .onNodeHover(node => {
+            const GFG = Graph;
+            const container = document.getElementById('graph-container');
+            if (hoveredNode === node && node !== null) return;
+            
+            if (hoveredNode && hoveredNode.__threeObj) {
+                const prevSprite = hoveredNode.__threeObj;
+                const colorStr = pastelColors[hoveredNode.group % pastelColors.length];
+                prevSprite.material.map = getNodeTexture(hoveredNode, colorStr, false);
+                prevSprite.scale.set(prevSprite.userData.baseScaleX, prevSprite.userData.baseScaleY, 1);
+            }
+            
+            hoveredNode = node;
+
+            if (node && node.__threeObj) {
+                const currentSprite = node.__threeObj;
+                const colorStr = pastelColors[node.group % pastelColors.length];
+                currentSprite.material.map = getNodeTexture(node, colorStr, true); // 호버용 텍스처로 변경
+
+                // ★★★ 호버 시 스케일 조정 방식 변경 ★★★
+                // baseScaleY (기본 높이 스케일)에 HOVER_SCALE_FACTOR를 적용하고,
+                // 이를 기준으로 aspectRatio를 사용하여 너비 스케일을 계산합니다.
+                const newHoverScaleY = currentSprite.userData.baseScaleY * HOVER_SCALE_FACTOR;
+                const newHoverScaleX = newHoverScaleY * currentSprite.userData.aspectRatio;
+
+                currentSprite.scale.set(newHoverScaleX, newHoverScaleY, 1);
+                // ★★★ 여기까지 변경 ★★★
+
+                container.style.cursor = 'pointer';
+                tooltipElement.style.display = 'block';
+                tooltipElement.innerHTML = node.name;
+            } else {
+                container.style.cursor = 'grab'; // 'grab' or 'default'
+                tooltipElement.style.display = 'none';
+            }
+             if (GFG.renderer()) GFG.renderer().domElement.addEventListener('mousemove', onMouseMoveTooltip);
+          })
+          .onNodeClick(node => {
+            if (node.url) {
+              window.open(node.url, '_blank');
+            }
+          })
+          .d3AlphaDecay(0) // 이미 위치가 고정되어 있으므로 시뮬레이션 영향 최소화
+          .d3VelocityDecay(0);
+
+
+        // 초기 카메라 위치: 구를 전체적으로 볼 수 있도록
+        Graph.cameraPosition({ z: SPHERE_RADIUS * 2.5 }); // 반지름의 약 2.5배 거리
+
+        // 구 형태를 시각적으로 표현 (선택 사항)
+        const sphereGeometry = new THREE.SphereGeometry(SPHERE_RADIUS, 32, 32);
+        const sphereMaterial = new THREE.MeshPhongMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.1, wireframe: true });
+        const sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        Graph.scene().add(sphereMesh);
+        
+        // 조명
+        Graph.scene().add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        dirLight.position.set(SPHERE_RADIUS*2, SPHERE_RADIUS*2, SPHERE_RADIUS*2); // 빛의 위치 조정
+        Graph.scene().add(dirLight);
+
+
+        function onMouseMoveTooltip(event) {
+            if (hoveredNode) {
+                tooltipElement.style.left = (event.clientX + 10) + 'px';
+                tooltipElement.style.top = (event.clientY + 10) + 'px';
+            } else {
+                tooltipElement.style.display = 'none';
+            }
+        }
+        
+        // 자동 카메라 조정 로직은 구 표면에서는 다르게 접근해야 할 수 있음.
+        // 여기서는 초기 카메라 위치로 충분할 수 있으나, 필요시 lookAt 중심으로 설정.
+        setTimeout(() => {
+             Graph.cameraPosition(
+                { x: 0, y: 0, z: SPHERE_RADIUS * 2.5 }, // 카메라 위치
+                { x: 0, y: 0, z: 0 }, // 구의 중심을 바라보도록
+                1000 // 애니메이션 시간
+            );
+        }, 500);
+
+
+        window.addEventListener('resize', () => {
+            Graph.width(window.innerWidth);
+            Graph.height(window.innerHeight);
+        });
+
+    }).catch(error => {
+      console.error("데이터 로딩 또는 처리 중 오류 발생:", error);
+      const container = document.getElementById('graph-container');
+      container.innerHTML = `<p style="color: red; text-align: center; padding-top: 50px;">데이터 로딩 실패: ${error.message}</p>`;
+    });
+  </script>
+</body>
+</html>
