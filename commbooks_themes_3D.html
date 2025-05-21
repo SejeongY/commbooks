@@ -19,11 +19,68 @@
     .scene-nav-info {
       display: none !important;
     }
+
+    #zoom-controls {
+    position: absolute;
+    bottom: 20px; /* ✅ 상단 대신 하단에 배치 */
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 10;
+  }
+
+
+    #zoom-controls button {
+    font-size: 24px;
+    padding: 10px 14px;
+    background-color: #ffffffcc;
+    border: 1px solid #aaa;
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: 1px 1px 4px rgba(0,0,0,0.2);
+    touch-action: manipulation; /* ✅ 모바일 터치 개선 */
+  }
+
+  #zoom-slider {
+    writing-mode: bt-lr;
+    -webkit-appearance: slider-vertical;
+    width: 36px;
+    height: 160px;
+    margin: 6px auto;
+    background: transparent;
+    touch-action: none; /* ✅ 모바일에서 의도치 않은 스크롤 방지 */
+  }
+
+  @media (max-width: 768px) {
+  #zoom-slider {
+    width: 100px;
+    height: 400px;
+  }
+
+  #zoom-controls button {
+    font-size: 56px;
+    padding: 24px 32px;
+    bottom: 60px;
+    right: 60px;
+  }
+}
+
+
+
+
   </style>
 </head>
 <body>
   <div id="graph-container"></div>
   <div id="node-tooltip" class="node-tooltip" style="display: none;"></div>
+  <div id="zoom-controls">
+    <button id="zoom-in">＋</button>
+    <input type="range" id="zoom-slider" min="50" max="1200" step=""46" value="250">
+    <button id="zoom-out">－</button>
+  </div>
+  
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.71.3/dist/3d-force-graph.min.js"></script>
@@ -278,6 +335,73 @@
                                // 0.02 ~ 0.05 사이의 낮은 값으로 설정하여 충분히 흩어지도록 합니다.
           .d3VelocityDecay(0.5); 
 
+          const cam = Graph.camera();
+          const zoomSlider = document.getElementById('zoom-slider');
+
+          // 슬라이더 → 카메라 위치 반영
+          zoomSlider.addEventListener('input', () => {
+          const val = parseFloat(zoomSlider.value);
+          const targetDist = sliderToCameraDist(val);
+          const direction = cam.position.clone().normalize();
+          cam.position.copy(direction.multiplyScalar(targetDist));
+        });
+
+          // 🔁 추가: 부드러운 카메라 이동 함수
+          function smoothZoomTo(sliderTargetValue) {
+  const targetDist = sliderToCameraDist(sliderTargetValue); // 💡 슬라이더 값 → 거리 변환
+  const duration = 400;
+  const startDist = cam.position.length();
+  const direction = cam.position.clone().normalize();
+  const startTime = performance.now();
+
+  function animate(time) {
+    const t = Math.min((time - startTime) / duration, 1);
+    const eased = t * (2 - t); // easeOutQuad
+    const current = startDist + (targetDist - startDist) * eased;
+    cam.position.copy(direction.clone().multiplyScalar(current));
+    zoomSlider.value = cameraDistToSlider(current); // 💡 현재 거리 → 슬라이더 값
+    if (t < 1) requestAnimationFrame(animate);
+  }
+
+  requestAnimationFrame(animate);
+}
+
+document.getElementById('zoom-in').addEventListener('click', () => {
+  const current = parseFloat(zoomSlider.value);
+  const newVal = Math.min(1200, current + 46 * 5); // 슬라이더 값은 커질수록 줌아웃!
+  smoothZoomTo(newVal);
+});
+
+document.getElementById('zoom-out').addEventListener('click', () => {
+  const current = parseFloat(zoomSlider.value);
+  const newVal = Math.max(50, current - 46 * 5);
+  smoothZoomTo(newVal);
+});
+
+
+const sliderMin = 50;
+const sliderMax = 1200;
+
+function sliderToCameraDist(sliderValue) {
+  return sliderMax - (sliderValue - sliderMin);
+}
+
+function cameraDistToSlider(cameraDist) {
+  return sliderMax - (cameraDist - sliderMin);
+}
+
+
+
+
+
+          function animateZoomSync() {
+            requestAnimationFrame(animateZoomSync);
+            const dist = cam.position.length();
+            zoomSlider.value = cameraDistToSlider(dist);
+          }
+
+          animateZoomSync();
+
 
         // 카메라 위치 설정 (이전과 동일)
         Graph.cameraPosition({ z: 250 });
@@ -292,6 +416,9 @@
 
           // ✅ 모바일이면 빠르게, 데스크톱이면 기본
           controls.rotateSpeed = isMobile ? 0.85 : 0.5;
+          controls.minDistance = 50;
+          controls.maxDistance = 1200;
+
         }
 
 
