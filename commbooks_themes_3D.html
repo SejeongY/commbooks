@@ -183,6 +183,8 @@
         const graphData = { nodes, links: [] };
         let hoveredNode = null;
 
+        const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+
         const Graph = ForceGraph3D()
           (document.getElementById('graph-container'))
           .graphData(graphData)
@@ -282,9 +284,11 @@
         if (controls && controls.mouseButtons) {
           controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
           Graph.controls().enablePan = false;
-          controls.rotateSpeed = 0.3;
 
+          // ✅ 모바일이면 빠르게, 데스크톱이면 기본
+          controls.rotateSpeed = isMobile ? 1.0 : 0.5;
         }
+
 
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         Graph.scene().add(ambientLight);
