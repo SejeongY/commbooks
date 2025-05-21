@@ -245,8 +245,13 @@
                     );
                 }
                 container.style.cursor = 'pointer';
-                tooltipElement.style.display = 'block';
-                tooltipElement.innerHTML = node.name;
+                
+                if (!isMobile) {
+                  tooltipElement.style.display = 'block';
+                  tooltipElement.innerHTML = node.name;
+                } else {
+                  tooltipElement.style.display = 'none';
+                }
 
             } else {
                 container.style.cursor = 'grab';
@@ -286,7 +291,7 @@
           Graph.controls().enablePan = false;
 
           // ✅ 모바일이면 빠르게, 데스크톱이면 기본
-          controls.rotateSpeed = isMobile ? 1.0 : 0.5;
+          controls.rotateSpeed = isMobile ? 0.85 : 0.5;
         }
 
 
