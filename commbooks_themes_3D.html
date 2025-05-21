@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>커뮤니케이션북스 지식연결지도</title>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #f5f0e6; }
+    #graph-container { width: 100%; height: 100%; }
+    .node-tooltip {
+      position: absolute;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 5px;
+      border-radius: 3px;
+      pointer-events: none; /* crucial for mouse events to pass through to the canvas */
+      font-family: sans-serif;
+      font-size: 12px;
+    }
+    .scene-nav-info {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="graph-container"></div>
+  <div id="node-tooltip" class="node-tooltip" style="display: none;"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.71.3/dist/3d-force-graph.min.js"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script> 
+
+  <script>
+    const pastelColors = [
+      "#FFCDD2", "#F8BBD0", "#E1BEE7", "#D1C4E9",
+      "#C5CAE9", "#BBDEFB", "#B3E5FC", "#B2EBF2",
+      "#B2DFDB", "#C8E6C9", "#DCEDC8", "#F0F4C3",
+      "#FFF9C4", "#FFECB3", "#FFE0B2", "#FFCCBC",
+      "#D7CCC8", "#CFD8DC", "#F5E0DC", "#E0E0E0"
+    ];
+
+    const FONT_SIZE = 11;
+    const PADDING_X = 10;
+    const PADDING_Y = 5;
+    const BORDER_RADIUS = 16;
+    const HOVER_SCALE_FACTOR = 1; // 확대 효과는 다시 적용됩니다. (원래 코드로 회귀)
+    const NODE_BASE_SCALE = 15;
+
+    const tooltipElement = document.getElementById('node-tooltip');
+
+    // Cache for node textures
+    const textureCache = new Map();
+    const TEXTURE_RESOLUTION_SCALE = 2; // 해상도 배율을 2로 낮춰서 성능 부담을 줄이고 테스트해 보세요.
+
+    // drawRoundedRect와 drawRoundedRectInternal은 원본 코드를 유지합니다.
+    function drawRoundedRect(ctx, x, y, w, h, r, isHovered) {
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+
+        if (isHovered) {
+            ctx.shadowColor = "rgba(0,0,0,0.3)";
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetX = 3;
+            ctx.shadowOffsetY = 3;
+        } else {
+            ctx.shadowColor = "rgba(0,0,0,0.15)";
+            ctx.shadowBlur = 5;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+        }
+        ctx.fill();
+        ctx.shadowColor = "transparent"; // Reset shadow for text
+    }
+    
+    function drawRoundedRectInternal(ctx, x, y, w, h, r) {
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+
+    function getNodeTexture(node, colorStr, isHovered = false) {
+        const cacheKey = `${node.id}-${colorStr}-${isHovered}-${TEXTURE_RESOLUTION_SCALE}`;
+        if (textureCache.has(cacheKey)) {
+            return textureCache.get(cacheKey);
+        }
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let currentFontSize = FONT_SIZE * TEXTURE_RESOLUTION_SCALE;
+        let currentPaddingX = PADDING_X * TEXTURE_RESOLUTION_SCALE;
+        let currentPaddingY = PADDING_Y * TEXTURE_RESOLUTION_SCALE;
+        let currentBorderRadius = BORDER_RADIUS * TEXTURE_RESOLUTION_SCALE;
+
+        let text = node.id;
+
+        ctx.font = `${currentFontSize}px sans-serif`;
+        const textMetrics = ctx.measureText(text);
+        
+        let nodeContentWidth = textMetrics.width + currentPaddingX * 2;
+        let nodeContentHeight = currentFontSize + currentPaddingY * 2;
+
+        const hoverScaleEffect = isHovered ? HOVER_SCALE_FACTOR : 1;
+        const shadowBlurEffect = 5 * TEXTURE_RESOLUTION_SCALE;
+        const shadowOffsetEffect = 2 * TEXTURE_RESOLUTION_SCALE;
+
+        const extraPaddingForShadow = Math.max(shadowBlurEffect + Math.abs(shadowOffsetEffect), 5 * TEXTURE_RESOLUTION_SCALE);
+
+
+        canvas.width = nodeContentWidth + extraPaddingForShadow * 2;
+        canvas.height = nodeContentHeight + extraPaddingForShadow * 2;
+        
+        const drawX = extraPaddingForShadow;
+        const drawY = extraPaddingForShadow;
+
+              // 🎯 그림자 효과 고정
+        ctx.shadowColor = "rgba(0,0,0,0.15)";
+        ctx.shadowBlur = 5 * TEXTURE_RESOLUTION_SCALE;
+        ctx.shadowOffsetX = 2 * TEXTURE_RESOLUTION_SCALE;
+        ctx.shadowOffsetY = 2 * TEXTURE_RESOLUTION_SCALE;
+
+        function getDarkerColor(hex, factor = 1.05) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        const darker = (c) => Math.max(0, Math.min(255, Math.floor(c * factor)));
+        return `rgb(${darker(r)}, ${darker(g)}, ${darker(b)})`;
+      }
+
+
+        const bgColor = isHovered ? getDarkerColor(colorStr) : colorStr;
+        ctx.fillStyle = bgColor;
+        drawRoundedRectInternal(ctx, drawX, drawY, nodeContentWidth, nodeContentHeight, currentBorderRadius);
+
+
+        ctx.shadowColor = "transparent";
+
+        ctx.fillStyle = isHovered ? '#000000' : '#333';
+        ctx.font = `${currentFontSize}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, drawX + nodeContentWidth / 2, drawY + nodeContentHeight / 2);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+        textureCache.set(cacheKey, texture);
+        return texture;
+    }
+
+
+    fetch("tags_3d_A.json")
+      .then(res => res.json())
+      .then(data => {
+        // ★★★ 노드 간 거리 조절을 위한 변경 사항 ★★★
+        const INITIAL_COORDINATE_SCALE_FACTOR = 100; // 초기 좌표 스케일링 팩터 (여전히 전반적인 분포에 영향)
+
+        const nodes = data.map(d => ({
+          id: d.id,
+          name: d.id,
+          group: d.group,
+          // ★★★ fx, fy, fz 대신 x, y, z로 초기 위치만 지정 ★★★
+          x: d.x * INITIAL_COORDINATE_SCALE_FACTOR, // D3 Force가 이 초기값을 기준으로 시뮬레이션 시작
+          y: d.y * INITIAL_COORDINATE_SCALE_FACTOR,
+          z: d.z * INITIAL_COORDINATE_SCALE_FACTOR,
+          url: `http://commbooks.com/도서-태그/${encodeURIComponent(d.id.replace(/\s+/g, '-'))}`,
+          val: 0.5
+        }));
+
+        const graphData = { nodes, links: [] };
+        let hoveredNode = null;
+
+        const Graph = ForceGraph3D()
+          (document.getElementById('graph-container'))
+          .graphData(graphData)
+          .nodeLabel(null)
+          .nodeColor(node => pastelColors[node.group % pastelColors.length])
+          .backgroundColor('#f5f0e6')
+          .enableNodeDrag(false) // 드래그는 여전히 비활성화
+          .nodeThreeObject(node => {
+            const colorStr = pastelColors[node.group % pastelColors.length];
+            const isHovered = hoveredNode === node; // 호버 상태에 따라 텍스처 생성
+            
+            const material = new THREE.SpriteMaterial({
+                map: getNodeTexture(node, colorStr, isHovered),
+                transparent: true,
+                depthWrite: false,
+            });
+            const sprite = new THREE.Sprite(material);
+
+            const canvasForTexture = getNodeTexture(node, colorStr, isHovered).image;
+            const spriteWidth = canvasForTexture.width;
+            const spriteHeight = canvasForTexture.height;
+            
+            // ★★★ 원본 코드의 호버 스케일링 로직 유지 ★★★
+            let scale = NODE_BASE_SCALE * (isHovered ? HOVER_SCALE_FACTOR : 1);
+            sprite.scale.set(spriteWidth * scale / 100, spriteHeight * scale / 100, 1);
+
+            sprite.userData = { node, baseScaleX: sprite.scale.x, baseScaleY: sprite.scale.y };
+            return sprite;
+          })
+          .onNodeHover(node => {
+            const GFG = Graph;
+            const container = document.getElementById('graph-container');
+            if (hoveredNode === node && node !== null) return;
+            
+            // Update hovered node texture and scale (original behavior)
+            if (hoveredNode) { // De-highlight previous
+                const prevSprite = hoveredNode.__threeObj;
+                if (prevSprite) {
+                    const colorStr = pastelColors[hoveredNode.group % pastelColors.length];
+                    if (prevSprite.material.map) prevSprite.material.map.dispose(); // 메모리 해제
+                    prevSprite.material.map = getNodeTexture(hoveredNode, colorStr, false);
+                    prevSprite.scale.set(prevSprite.userData.baseScaleX, prevSprite.userData.baseScaleY, 1);
+                }
+            }
+            
+            hoveredNode = node;
+
+            if (node) {
+                const currentSprite = node.__threeObj;
+                if (currentSprite) {
+                    const colorStr = pastelColors[node.group % pastelColors.length];
+                    if (currentSprite.material.map) currentSprite.material.map.dispose(); // 메모리 해제
+                    currentSprite.material.map = getNodeTexture(node, colorStr, true);
+                    currentSprite.scale.set(
+                        currentSprite.userData.baseScaleX * HOVER_SCALE_FACTOR, 
+                        currentSprite.userData.baseScaleY * HOVER_SCALE_FACTOR, 
+                        1
+                    );
+                }
+                container.style.cursor = 'pointer';
+                tooltipElement.style.display = 'block';
+                tooltipElement.innerHTML = node.name;
+
+            } else {
+                container.style.cursor = 'grab';
+                tooltipElement.style.display = 'none';
+            }
+            GFG.renderer().domElement.addEventListener('mousemove', onMouseMoveTooltip, false);
+          })
+          .onNodeClick(node => {
+            if (node.url) {
+              window.open(node.url, '_blank');
+            }
+          })
+          // ★★★ D3 Force 시뮬레이션 설정 추가 ★★★
+          // 기본 척력 (charge) 힘 설정
+          .d3Force('charge', d3.forceManyBody()
+            .strength(-2) // 노드들을 서로 밀어내는 힘의 강도. 음수여야 척력입니다. 절대값이 클수록 강하게 밀어냅니다.
+            .distanceMin(25) // 이 거리(월드 유닛)보다 가까운 노드들만 척력이 적용됩니다.
+                             // 이 값을 조절하여 가까운 노드들이 흩어지는 정도를 제어합니다.
+                             // 현재 NODE_BASE_SCALE이 15이니 20정도가 적절한 시작점입니다.
+            .distanceMax(100) // 이 거리보다 먼 노드들 사이에는 척력이 적용되지 않습니다. (선택적)
+          )
+          // 시뮬레이션 멈추는 속도 조절
+          .d3AlphaDecay(0.02) // 0.1은 너무 빨라서 노드들이 충분히 흩어지지 않을 수 있습니다.
+                               // 0.02 ~ 0.05 사이의 낮은 값으로 설정하여 충분히 흩어지도록 합니다.
+          .d3VelocityDecay(0.5); 
+
+
+        // 카메라 위치 설정 (이전과 동일)
+        Graph.cameraPosition({ z: 250 });
+
+        Graph.renderer().domElement.addEventListener('contextmenu', function(event) {
+          event.preventDefault();
+        }, false);
+        const controls = Graph.controls();
+        if (controls && controls.mouseButtons) {
+          controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
+          Graph.controls().enablePan = false;
+          controls.rotateSpeed = 0.3;
+
+        }
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        Graph.scene().add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        directionalLight.position.set(1, 1, 1);
+        Graph.scene().add(directionalLight);
+
+        function onMouseMoveTooltip(event) {
+            if (hoveredNode) {
+                tooltipElement.style.left = (event.clientX + 10) + 'px';
+                tooltipElement.style.top = (event.clientY + 10) + 'px';
+            } else {
+                tooltipElement.style.display = 'none';
+            }
+        }
+        
+        setTimeout(() => {
+            const { nodes: graphNodes } = Graph.graphData();
+            if (graphNodes.length) {
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+                graphNodes.forEach(n => {
+                    // D3 Force 시뮬레이션이 끝난 후의 최종 위치 (n.x, n.y, n.z)를 사용
+                    minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
+                    minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
+                    minZ = Math.min(minZ, n.z); maxZ = Math.max(maxZ, n.z);
+                });
+
+                const centerX = (minX + maxX) / 2;
+                const centerY = (minY + maxY) / 2;
+                const centerZ = (minZ + maxZ) / 2;
+                const maxExtent = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+                const camera = Graph.camera();
+                if (camera) {
+                    let camDistance = maxExtent / (2 * Math.tan(Math.PI * camera.fov / 360));
+                    camDistance = Math.max(camDistance, 100);
+                    camDistance = Math.min(camDistance, 2000);
+                    Graph.cameraPosition(
+                        { x: centerX, y: centerY, z: centerZ + camDistance * 1.2 },
+                        { x: centerX, y: centerY, z: centerZ },
+                        1000
+                    );
+                } else {
+                     console.warn("카메라 객체를 가져올 수 없어 자동 위치 조정을 생략합니다.");
+                     Graph.cameraPosition({ z: 400 + Math.max(maxX-minX, maxY-minY, maxZ-minZ) });
+                }
+            } else {
+                Graph.cameraPosition({ x:0, y:0, z: 250 });
+            }
+        }, 1000);
+
+        window.addEventListener('resize', () => {
+            Graph.width(window.innerWidth);
+            Graph.height(window.innerHeight);
+        });
+
+    }).catch(error => {
+      console.error("데이터 로딩 또는 처리 중 오류 발생:", error);
+      const container = document.getElementById('graph-container');
+      container.innerHTML = `<p style="color: red; text-align: center; padding-top: 50px;">데이터 로딩 실패: ${error.message}</p>`;
+    });
+
+  </script>
+</body>
+</html>
