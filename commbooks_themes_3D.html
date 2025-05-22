@@ -406,7 +406,7 @@ function cameraDistToSlider(cameraDist) {
           // 데스크탑 마우스 설정
           controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE; // 좌클릭 회전 (기본값)
           controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;  // 가운데 클릭 줌 (기본값)
-          controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;   // 우클릭 팬 (기본값)
+          controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;   // 우클릭 팬 (기본값)
                                                         // 만약 우클릭을 회전으로 하고 싶다면:
                                                         // controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
 
@@ -422,16 +422,15 @@ function cameraDistToSlider(cameraDist) {
           controls.maxDistance = 1500;
 
           // --- 모바일 터치 설정 수정 ---
-          if (controls.touches) { // touches 속성이 있는지 확인 (OrbitControls의 경우 존재)
-            controls.touches.ONE = THREE.TOUCH.ROTATE; // 한 손가락: 회전
-
-            // 두 손가락: 오직 줌(DOLLY)만 허용. 패닝 동작 제거
-            controls.touches.TWO = THREE.TOUCH.DOLLY;
+          controls.touches = {
+  ONE: THREE.TOUCH.ROTATE,          // 한 손가락 → 회전
+  TWO: THREE.TOUCH.DOLLY            // 두 손가락 → 줌만 (패닝 제거)
+};
 
             // 만약 두 손가락으로 아무 동작도 안하게 하려면:
             // controls.touches.TWO = undefined; // 또는 특정 동작을 할당하지 않음
             // 하지만 사용자는 보통 두 손가락으로 줌을 기대하므로 DOLLY가 적절합니다.
-          }
+          
 
           // (선택 사항) 줌 기능 자체를 비활성화하고 싶다면
           // controls.enableZoom = false;
