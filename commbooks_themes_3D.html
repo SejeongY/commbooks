@@ -404,6 +404,8 @@ function cameraDistToSlider(cameraDist) {
           event.preventDefault();
         }, false);
                 const controls = Graph.controls();
+                console.log('🚨 controls type:', controls.constructor.name); // 이거!
+                console.log(controls);
 
         if (controls && controls.mouseButtons) { // controls 객체가 OrbitControls와 유사한 속성을 가졌는지 확인
           // 데스크탑 마우스 설정
@@ -414,29 +416,14 @@ function cameraDistToSlider(cameraDist) {
                                                         // controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
 
           // 패닝 비활성화 (마우스 및 터치에 영향)
-          controls.enablePan = false;
-
-          // 회전 활성화
-          controls.enableRotate = true;
+          controls.noPan = true;
           controls.rotateSpeed = isMobile ? 0.85 : 0.5;
 
           // 줌 거리 제한
           controls.minDistance = 50;
           controls.maxDistance = 1500;
 
-          // --- 모바일 터치 설정 수정 ---
-          controls.touches = {
-  ONE: THREE.TOUCH.ROTATE,          // 한 손가락 → 회전
-  TWO: THREE.TOUCH.DOLLY_ROTATE     // 두 손가락 → 줌만 (패닝 제거)
-};
 
-            // 만약 두 손가락으로 아무 동작도 안하게 하려면:
-            // controls.touches.TWO = undefined; // 또는 특정 동작을 할당하지 않음
-            // 하지만 사용자는 보통 두 손가락으로 줌을 기대하므로 DOLLY가 적절합니다.
-          
-
-          // (선택 사항) 줌 기능 자체를 비활성화하고 싶다면
-          // controls.enableZoom = false;
 
         }
 
