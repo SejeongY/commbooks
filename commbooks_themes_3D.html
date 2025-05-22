@@ -53,7 +53,12 @@
     touch-action: none; /* ✅ 모바일에서 의도치 않은 스크롤 방지 */
   }
 
-
+@media (max-width: 768px) {
+  #zoom-slider {
+    width: 20px;
+    height: 100px;
+  }
+}
 
 
   </style>
@@ -63,7 +68,7 @@
   <div id="node-tooltip" class="node-tooltip" style="display: none;"></div>
   <div id="zoom-controls">
     <button id="zoom-in">＋</button>
-    <input type="range" id="zoom-slider" min="50" max="1200" step=""46" value="250">
+    <input type="range" id="zoom-slider" min="50" max="1500" step=""60" value="250">
     <button id="zoom-out">－</button>
   </div>
   
@@ -354,19 +359,19 @@
 
 document.getElementById('zoom-in').addEventListener('click', () => {
   const current = parseFloat(zoomSlider.value);
-  const newVal = Math.min(1200, current + 46 * 5); // 슬라이더 값은 커질수록 줌아웃!
+  const newVal = Math.min(1500, current + 60 * 5); // 슬라이더 값은 커질수록 줌아웃!
   smoothZoomTo(newVal);
 });
 
 document.getElementById('zoom-out').addEventListener('click', () => {
   const current = parseFloat(zoomSlider.value);
-  const newVal = Math.max(50, current - 46 * 5);
+  const newVal = Math.max(50, current - 60 * 5);
   smoothZoomTo(newVal);
 });
 
 
 const sliderMin = 50;
-const sliderMax = 1200;
+const sliderMax = 1500;
 
 function sliderToCameraDist(sliderValue) {
   return sliderMax - (sliderValue - sliderMin);
@@ -399,12 +404,18 @@ function cameraDistToSlider(cameraDist) {
         if (controls && controls.mouseButtons) {
           controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
           Graph.controls().enablePan = false;
-
           // ✅ 모바일이면 빠르게, 데스크톱이면 기본
           controls.rotateSpeed = isMobile ? 0.85 : 0.5;
           controls.minDistance = 50;
-          controls.maxDistance = 1200;
+          controls.maxDistance = 1500;
+          controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
 
+          if (controls.touches && THREE.TOUCH) {
+            controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
+            // 또는: controls.touches.TWO = THREE.TOUCH.DOLLY;
+          } else {
+            console.warn("Controls object does not have 'touches' property or THREE.TOUCH is not defined. Could not disable two-finger panning via specific touch controls.");
+          }
         }
 
 
