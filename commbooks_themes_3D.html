@@ -311,10 +311,14 @@
             GFG.renderer().domElement.addEventListener('mousemove', onMouseMoveTooltip, false);
           })
           .onNodeClick(node => {
-            if (node.url) {
-              window.open(node.url, '_blank');
-            }
-          })
+  const e = window.event;  // 전역 이벤트 객체
+  if (e && e.touches && e.touches.length > 1) return;  // 두 손가락 이상 → 링크 차단
+
+  if (node.url) {
+    window.open(node.url, '_blank');
+  }
+})
+
           // ★★★ D3 Force 시뮬레이션 설정 추가 ★★★
           // 기본 척력 (charge) 힘 설정
           .d3Force('charge', d3.forceManyBody()
