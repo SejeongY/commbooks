@@ -502,7 +502,7 @@ function cameraDistToSlider(cameraDist) {
                     camDistance = Math.max(camDistance, 100);
                     camDistance = Math.min(camDistance, 2000);
                     Graph.cameraPosition(
-                        { x: centerX, y: centerY, z: centerZ + camDistance * 1.2 },
+                        { x: centerX, y: centerY, z: centerZ + 1500 },
                         { x: centerX, y: centerY, z: centerZ },
                         1000
                     );
@@ -511,7 +511,7 @@ function cameraDistToSlider(cameraDist) {
                      Graph.cameraPosition({ z: 400 + Math.max(maxX-minX, maxY-minY, maxZ-minZ) });
                 }
             } else {
-                Graph.cameraPosition({ x:0, y:0, z: 250 });
+                Graph.cameraPosition({ x:0, y:0, z: 1500 });
             }
         }, 1000);
 
