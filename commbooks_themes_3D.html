@@ -235,6 +235,39 @@
         let hoveredNode = null;
 
         const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+        // 터치 상태 추적 변수
+          let isTouchZooming = false;
+          let touchStartTime = 0;
+          let lastTouchCount = 0;
+
+          // 터치 이벤트 리스너 추가
+          document.addEventListener('touchstart', (e) => {
+            touchStartTime = Date.now();
+            lastTouchCount = e.touches.length;
+            if (e.touches.length > 1) {
+              isTouchZooming = true;
+            }
+          }, { passive: true });
+
+          document.addEventListener('touchend', (e) => {
+            const touchDuration = Date.now() - touchStartTime;
+            
+            // 멀티터치였거나, 너무 긴 터치인 경우만 줌으로 간주
+            if (lastTouchCount > 1 || touchDuration > 1000) {
+              // 줌 상태를 잠시 유지하여 의도치 않은 클릭 방지
+              setTimeout(() => {
+                isTouchZooming = false;
+              }, 200);
+            } else {
+              isTouchZooming = false;
+            }
+          }, { passive: true });
+
+          document.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 1) {
+              isTouchZooming = true;
+            }
+          }, { passive: true });
 
         const Graph = ForceGraph3D()
           (document.getElementById('graph-container'))
@@ -311,13 +344,15 @@
             GFG.renderer().domElement.addEventListener('mousemove', onMouseMoveTooltip, false);
           })
           .onNodeClick(node => {
-  const e = window.event;  // 전역 이벤트 객체
-  if (e && e.touches && e.touches.length > 1) return;  // 두 손가락 이상 → 링크 차단
-
-  if (node.url) {
-    window.open(node.url, '_blank');
-  }
-})
+  // 모바일 터치 상태 추적
+            if (isTouchZooming) {
+              return; // 줌 중일 때는 클릭 무시
+            }
+            
+            if (node.url) {
+              window.open(node.url, '_blank');
+            }
+          })
 
           // ★★★ D3 Force 시뮬레이션 설정 추가 ★★★
           // 기본 척력 (charge) 힘 설정
