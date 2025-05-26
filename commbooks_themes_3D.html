@@ -375,7 +375,8 @@
           zoomSlider.addEventListener('input', () => {
           const val = parseFloat(zoomSlider.value);
           const targetDist = sliderToCameraDist(val);
-          const direction = cam.position.clone().normalize();
+          const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion).normalize();
+
           cam.position.copy(direction.multiplyScalar(targetDist));
         });
 
@@ -384,7 +385,7 @@
   const targetDist = sliderToCameraDist(sliderTargetValue); // 💡 슬라이더 값 → 거리 변환
   const duration = 400;
   const startDist = cam.position.length();
-  const direction = cam.position.clone().normalize();
+  const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion).normalize();
   const startTime = performance.now();
 
   function animate(time) {
@@ -424,9 +425,6 @@ function cameraDistToSlider(cameraDist) {
 }
 
 
-
-
-
           function animateZoomSync() {
             requestAnimationFrame(animateZoomSync);
             const dist = cam.position.length();
@@ -438,6 +436,9 @@ function cameraDistToSlider(cameraDist) {
 
         // 카메라 위치 설정 (이전과 동일)
         Graph.cameraPosition({ z: 250 });
+        cam.position.set(0, 0, 250);
+        cam.lookAt(0, 0, 0);
+
 
         Graph.renderer().domElement.addEventListener('contextmenu', function(event) {
           event.preventDefault();
