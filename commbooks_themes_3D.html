@@ -375,30 +375,30 @@
           zoomSlider.addEventListener('input', () => {
           const val = parseFloat(zoomSlider.value);
           const targetDist = sliderToCameraDist(val);
-          const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion).normalize();
-
-          cam.position.copy(direction.multiplyScalar(targetDist));
+          cam.position.setZ(targetDist);
         });
 
           // 🔁 추가: 부드러운 카메라 이동 함수
           function smoothZoomTo(sliderTargetValue) {
-  const targetDist = sliderToCameraDist(sliderTargetValue); // 💡 슬라이더 값 → 거리 변환
+  const targetDist = sliderToCameraDist(sliderTargetValue);
   const duration = 400;
-  const startDist = cam.position.length();
-  const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion).normalize();
+  const startDist = cam.position.z;
   const startTime = performance.now();
 
   function animate(time) {
     const t = Math.min((time - startTime) / duration, 1);
     const eased = t * (2 - t); // easeOutQuad
-    const current = startDist + (targetDist - startDist) * eased;
-    cam.position.copy(direction.clone().multiplyScalar(current));
-    zoomSlider.value = cameraDistToSlider(current); // 💡 현재 거리 → 슬라이더 값
+    const currentZ = startDist + (targetDist - startDist) * eased;
+
+    cam.position.setZ(currentZ);  // ← 여기만 z축 기준으로 고정
+    zoomSlider.value = cameraDistToSlider(currentZ); // 슬라이더와 동기화
+
     if (t < 1) requestAnimationFrame(animate);
   }
 
   requestAnimationFrame(animate);
 }
+
 
 document.getElementById('zoom-in').addEventListener('click', () => {
   const current = parseFloat(zoomSlider.value);
