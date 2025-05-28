@@ -89,12 +89,12 @@
 
 
     const pastelColors = [
-      "#FFCDD2", "#F8BBD0", "#E1BEE7", "#D1C4E9",
-      "#C5CAE9", "#BBDEFB", "#B3E5FC", "#B2EBF2",
-      "#B2DFDB", "#C8E6C9", "#DCEDC8", "#F0F4C3",
-      "#FFF9C4", "#FFECB3", "#FFE0B2", "#FFCCBC",
-      "#D7CCC8", "#CFD8DC", "#F5E0DC", "#E0E0E0"
-    ];
+    "#F78C8C", "#E885A7", "#D899EA", "#AE9CF0", // Red, Pink, Muted Grape, Muted Violet
+  "#98A9F7", "#79B5F0", "#6FCEDD", "#4DD4A8", // Muted Indigo, Muted Blue, Muted Cyan, Teal
+  "#72D986", "#ADDD50", "#FDD045", "#FFA85C", // Green, Lime, Yellow, Orange
+  "#F78C8C", "#C2E678", "#90C3F6", "#E6B0F4", // Red (Repeat), Muted Green, Muted Bright Blue, Muted Bright Purple
+  "#FFA0A0", "#A8D2F8", "#F0C2F9", "#FDE06F"  // Lighter Red, Muted Lighter Blue, Muted Lighter Purple, Lighter Yellow
+];
 
     const FONT_SIZE = 11;
     const PADDING_X = 10;
@@ -207,7 +207,7 @@
 
         ctx.shadowColor = "transparent";
 
-        ctx.fillStyle = isHovered ? '#000000' : '#333';
+        ctx.fillStyle = isHovered ? '#000000' : '#000000';
         ctx.font = `${currentFontSize}px sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
