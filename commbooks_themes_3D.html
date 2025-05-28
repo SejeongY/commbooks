@@ -482,39 +482,42 @@ function cameraDistToSlider(cameraDist) {
             }
         }
         
-        setTimeout(() => {
-            const { nodes: graphNodes } = Graph.graphData();
-            if (graphNodes.length) {
-                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
-                graphNodes.forEach(n => {
-                    // D3 Force 시뮬레이션이 끝난 후의 최종 위치 (n.x, n.y, n.z)를 사용
-                    minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
-                    minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
-                    minZ = Math.min(minZ, n.z); maxZ = Math.max(maxZ, n.z);
-                });
+              setTimeout(() => {
+          if (!isMobile) return; // 💡 데스크톱일 경우 자동 카메라 이동 끔
 
-                const centerX = (minX + maxX) / 2;
-                const centerY = (minY + maxY) / 2;
-                const centerZ = (minZ + maxZ) / 2;
-                const maxExtent = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
-                const camera = Graph.camera();
-                if (camera) {
-                    let camDistance = maxExtent / (2 * Math.tan(Math.PI * camera.fov / 360));
-                    camDistance = Math.max(camDistance, 100);
-                    camDistance = Math.min(camDistance, 2000);
-                    Graph.cameraPosition(
-                        { x: centerX, y: centerY, z: centerZ + 1500 },
-                        { x: centerX, y: centerY, z: centerZ },
-                        1000
-                    );
-                } else {
-                     console.warn("카메라 객체를 가져올 수 없어 자동 위치 조정을 생략합니다.");
-                     Graph.cameraPosition({ z: 400 + Math.max(maxX-minX, maxY-minY, maxZ-minZ) });
-                }
-            } else {
-                Graph.cameraPosition({ x:0, y:0, z: 1500 });
-            }
-        }, 1000);
+          const { nodes: graphNodes } = Graph.graphData();
+          if (graphNodes.length) {
+              let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+              graphNodes.forEach(n => {
+                  minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
+                  minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
+                  minZ = Math.min(minZ, n.z); maxZ = Math.max(maxZ, n.z);
+              });
+
+              const centerX = (minX + maxX) / 2;
+              const centerY = (minY + maxY) / 2;
+              const centerZ = (minZ + maxZ) / 2;
+              const maxExtent = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+              const camera = Graph.camera();
+
+              if (camera) {
+                  let camDistance = maxExtent / (2 * Math.tan(Math.PI * camera.fov / 360));
+                  camDistance = Math.max(camDistance, 100);
+                  camDistance = Math.min(camDistance, 2000);
+                  Graph.cameraPosition(
+                      { x: centerX, y: centerY, z: centerZ + 1500 },
+                      { x: centerX, y: centerY, z: centerZ },
+                      1000
+                  );
+              } else {
+                  console.warn("카메라 객체를 가져올 수 없어 자동 위치 조정을 생략합니다.");
+                  Graph.cameraPosition({ z: 400 + maxExtent });
+              }
+          } else {
+              Graph.cameraPosition({ x: 0, y: 0, z: 1500 });
+          }
+      }, 1000);
+
 
         window.addEventListener('resize', () => {
             Graph.width(window.innerWidth);
