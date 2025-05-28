@@ -62,6 +62,7 @@
 
 
   </style>
+  <link rel="preload" href="tags_3d_A.json" as="fetch" crossorigin="anonymous">
 </head>
 <body>
   <div id="graph-container"></div>
@@ -79,6 +80,12 @@
 
   <script>
 
+    let preloadDataPromise = fetch("tags_3d_A.json")
+      .then(res => res.json())
+      .catch(error => {
+        console.error("프리로드 실패:", error);
+        return []; // 실패해도 빈 배열 반환해서 이후 오류 방지
+      });
 
 
     const pastelColors = [
@@ -94,13 +101,13 @@
     const PADDING_Y = 5;
     const BORDER_RADIUS = 16;
     const HOVER_SCALE_FACTOR = 1; // 확대 효과는 다시 적용됩니다. (원래 코드로 회귀)
-    const NODE_BASE_SCALE = 15;
+    const NODE_BASE_SCALE = 22.5;
 
     const tooltipElement = document.getElementById('node-tooltip');
 
     // Cache for node textures
     const textureCache = new Map();
-    const TEXTURE_RESOLUTION_SCALE = 2; // 해상도 배율을 2로 낮춰서 성능 부담을 줄이고 테스트해 보세요.
+    const TEXTURE_RESOLUTION_SCALE = 1.5; // 해상도 배율을 2로 낮춰서 성능 부담을 줄이고 테스트해 보세요.
 
     // drawRoundedRect와 drawRoundedRectInternal은 원본 코드를 유지합니다.
     function drawRoundedRect(ctx, x, y, w, h, r, isHovered) {
@@ -213,23 +220,20 @@
     }
 
 
-    fetch("tags_3d_A.json")
-      .then(res => res.json())
-      .then(data => {
-        // ★★★ 노드 간 거리 조절을 위한 변경 사항 ★★★
-        const INITIAL_COORDINATE_SCALE_FACTOR = 100; // 초기 좌표 스케일링 팩터 (여전히 전반적인 분포에 영향)
+        preloadDataPromise.then(data => {
+      // 여기부터는 기존 .then(data => {...}) 부분을 그대로 복붙하면 됩니다
+      const INITIAL_COORDINATE_SCALE_FACTOR = 100;
 
-        const nodes = data.map(d => ({
-          id: d.id,
-          name: d.id,
-          group: d.group,
-          // ★★★ fx, fy, fz 대신 x, y, z로 초기 위치만 지정 ★★★
-          x: d.x * INITIAL_COORDINATE_SCALE_FACTOR, // D3 Force가 이 초기값을 기준으로 시뮬레이션 시작
-          y: d.y * INITIAL_COORDINATE_SCALE_FACTOR,
-          z: d.z * INITIAL_COORDINATE_SCALE_FACTOR,
-          url: `http://commbooks.com/도서-태그/${encodeURIComponent(d.id.replace(/\s+/g, '-'))}`,
-          val: 0.5
-        }));
+      const nodes = data.map(d => ({
+        id: d.id,
+        name: d.id,
+        group: d.group,
+        x: d.x * INITIAL_COORDINATE_SCALE_FACTOR,
+        y: d.y * INITIAL_COORDINATE_SCALE_FACTOR,
+        z: d.z * INITIAL_COORDINATE_SCALE_FACTOR,
+        url: `http://commbooks.com/도서-태그/${encodeURIComponent(d.id.replace(/\s+/g, '-'))}`,
+        val: 0.5
+      }));
 
         const graphData = { nodes, links: [] };
         let hoveredNode = null;
