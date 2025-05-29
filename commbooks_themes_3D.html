@@ -69,7 +69,7 @@
   <div id="node-tooltip" class="node-tooltip" style="display: none;"></div>
   <div id="zoom-controls">
     <button id="zoom-in">＋</button>
-    <input type="range" id="zoom-slider" min="50" max="1500" step=""60" value="250">
+    <input type="range" id="zoom-slider" min="50" max="1500" step="60" value="250">
     <button id="zoom-out">－</button>
   </div>
   
@@ -100,16 +100,13 @@
     const PADDING_X = 10;
     const PADDING_Y = 5;
     const BORDER_RADIUS = 16;
-    const HOVER_SCALE_FACTOR = 1; // 확대 효과는 다시 적용됩니다. (원래 코드로 회귀)
+    const HOVER_SCALE_FACTOR = 1; 
     const NODE_BASE_SCALE = 22.5;
 
     const tooltipElement = document.getElementById('node-tooltip');
-
-    // Cache for node textures
     const textureCache = new Map();
-    const TEXTURE_RESOLUTION_SCALE = 1.5; // 해상도 배율을 2로 낮춰서 성능 부담을 줄이고 테스트해 보세요.
+    const TEXTURE_RESOLUTION_SCALE = 1.5; 
 
-    // drawRoundedRect와 drawRoundedRectInternal은 원본 코드를 유지합니다.
     function drawRoundedRect(ctx, x, y, w, h, r, isHovered) {
         if (w < 2 * r) r = w / 2;
         if (h < 2 * r) r = h / 2;
@@ -133,7 +130,7 @@
             ctx.shadowOffsetY = 2;
         }
         ctx.fill();
-        ctx.shadowColor = "transparent"; // Reset shadow for text
+        ctx.shadowColor = "transparent"; 
     }
     
     function drawRoundedRectInternal(ctx, x, y, w, h, r) {
@@ -175,9 +172,7 @@
         const hoverScaleEffect = isHovered ? HOVER_SCALE_FACTOR : 1;
         const shadowBlurEffect = 5 * TEXTURE_RESOLUTION_SCALE;
         const shadowOffsetEffect = 2 * TEXTURE_RESOLUTION_SCALE;
-
         const extraPaddingForShadow = Math.max(shadowBlurEffect + Math.abs(shadowOffsetEffect), 5 * TEXTURE_RESOLUTION_SCALE);
-
 
         canvas.width = nodeContentWidth + extraPaddingForShadow * 2;
         canvas.height = nodeContentHeight + extraPaddingForShadow * 2;
@@ -185,28 +180,24 @@
         const drawX = extraPaddingForShadow;
         const drawY = extraPaddingForShadow;
 
-              // 🎯 그림자 효과 고정
         ctx.shadowColor = "rgba(0,0,0,0.15)";
         ctx.shadowBlur = 5 * TEXTURE_RESOLUTION_SCALE;
         ctx.shadowOffsetX = 2 * TEXTURE_RESOLUTION_SCALE;
         ctx.shadowOffsetY = 2 * TEXTURE_RESOLUTION_SCALE;
 
         function getDarkerColor(hex, factor = 1.05) {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        const darker = (c) => Math.max(0, Math.min(255, Math.floor(c * factor)));
-        return `rgb(${darker(r)}, ${darker(g)}, ${darker(b)})`;
-      }
-
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            const darker = (c) => Math.max(0, Math.min(255, Math.floor(c * factor)));
+            return `rgb(${darker(r)}, ${darker(g)}, ${darker(b)})`;
+        }
 
         const bgColor = isHovered ? getDarkerColor(colorStr) : colorStr;
         ctx.fillStyle = bgColor;
         drawRoundedRectInternal(ctx, drawX, drawY, nodeContentWidth, nodeContentHeight, currentBorderRadius);
 
-
         ctx.shadowColor = "transparent";
-
         ctx.fillStyle = isHovered ? '#000000' : '#000000';
         ctx.font = `${currentFontSize}px sans-serif`;
         ctx.textAlign = "center";
@@ -220,256 +211,275 @@
     }
 
 
-        preloadDataPromise.then(data => {
-      // 여기부터는 기존 .then(data => {...}) 부분을 그대로 복붙하면 됩니다
-      const INITIAL_COORDINATE_SCALE_FACTOR = 100;
-
-      const nodes = data.map(d => ({
-        id: d.id,
-        name: d.id,
-        group: d.group,
-        x: d.x * INITIAL_COORDINATE_SCALE_FACTOR,
-        y: d.y * INITIAL_COORDINATE_SCALE_FACTOR,
-        z: d.z * INITIAL_COORDINATE_SCALE_FACTOR,
-        url: `http://commbooks.com/도서-태그/${encodeURIComponent(d.id.replace(/\s+/g, '-'))}`,
-        val: 0.5
-      }));
+    preloadDataPromise.then(data => {
+        const INITIAL_COORDINATE_SCALE_FACTOR = 100;
+        const nodes = data.map(d => ({
+            id: d.id,
+            name: d.id,
+            group: d.group,
+            x: d.x * INITIAL_COORDINATE_SCALE_FACTOR,
+            y: d.y * INITIAL_COORDINATE_SCALE_FACTOR,
+            z: d.z * INITIAL_COORDINATE_SCALE_FACTOR,
+            url: `http://commbooks.com/도서-태그/${encodeURIComponent(d.id.replace(/\s+/g, '-'))}`,
+            val: 0.5
+        }));
 
         const graphData = { nodes, links: [] };
         let hoveredNode = null;
-
         const isMobile = /Mobi|Android/i.test(navigator.userAgent);
-        // 터치 상태 추적 변수
-          let isTouchZooming = false;
-          let touchStartTime = 0;
-          let lastTouchCount = 0;
+        let isTouchZooming = false;
+        let touchStartTime = 0;
+        let lastTouchCount = 0;
 
-          // 터치 이벤트 리스너 추가
-          document.addEventListener('touchstart', (e) => {
+        document.addEventListener('touchstart', (e) => {
             touchStartTime = Date.now();
             lastTouchCount = e.touches.length;
-            if (e.touches.length > 1) {
-              isTouchZooming = true;
-            }
-          }, { passive: true });
+            if (e.touches.length > 1) isTouchZooming = true;
+        }, { passive: true });
 
-          document.addEventListener('touchend', (e) => {
+        document.addEventListener('touchend', (e) => {
             const touchDuration = Date.now() - touchStartTime;
-            
-            // 멀티터치였거나, 너무 긴 터치인 경우만 줌으로 간주
             if (lastTouchCount > 1 || touchDuration > 1000) {
-              // 줌 상태를 잠시 유지하여 의도치 않은 클릭 방지
-              setTimeout(() => {
-                isTouchZooming = false;
-              }, 200);
+                setTimeout(() => { isTouchZooming = false; }, 200);
             } else {
-              isTouchZooming = false;
+                isTouchZooming = false;
             }
-          }, { passive: true });
+        }, { passive: true });
 
-          document.addEventListener('touchmove', (e) => {
-            if (e.touches.length > 1) {
-              isTouchZooming = true;
-            }
-          }, { passive: true });
+        document.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 1) isTouchZooming = true;
+        }, { passive: true });
 
         const Graph = ForceGraph3D()
-          (document.getElementById('graph-container'))
-          .graphData(graphData)
-          .nodeLabel(null)
-          .nodeColor(node => pastelColors[node.group % pastelColors.length])
-          .backgroundColor('#f5f0e6')
-          .enableNodeDrag(false) // 드래그는 여전히 비활성화
-          .nodeThreeObject(node => {
-            const colorStr = pastelColors[node.group % pastelColors.length];
-            const isHovered = hoveredNode === node; // 호버 상태에 따라 텍스처 생성
-            
-            const material = new THREE.SpriteMaterial({
-                map: getNodeTexture(node, colorStr, isHovered),
-                transparent: true,
-                depthWrite: false,
-            });
-            const sprite = new THREE.Sprite(material);
-
-            const canvasForTexture = getNodeTexture(node, colorStr, isHovered).image;
-            const spriteWidth = canvasForTexture.width;
-            const spriteHeight = canvasForTexture.height;
-            
-            // ★★★ 원본 코드의 호버 스케일링 로직 유지 ★★★
-            let scale = NODE_BASE_SCALE * (isHovered ? HOVER_SCALE_FACTOR : 1);
-            sprite.scale.set(spriteWidth * scale / 100, spriteHeight * scale / 100, 1);
-
-            sprite.userData = { node, baseScaleX: sprite.scale.x, baseScaleY: sprite.scale.y };
-            return sprite;
-          })
-          .onNodeHover(node => {
-            const GFG = Graph;
-            const container = document.getElementById('graph-container');
-            if (hoveredNode === node && node !== null) return;
-            
-            // Update hovered node texture and scale (original behavior)
-            if (hoveredNode) { // De-highlight previous
-                const prevSprite = hoveredNode.__threeObj;
-                if (prevSprite) {
-                    const colorStr = pastelColors[hoveredNode.group % pastelColors.length];
-                    if (prevSprite.material.map) prevSprite.material.map.dispose(); // 메모리 해제
-                    prevSprite.material.map = getNodeTexture(hoveredNode, colorStr, false);
-                    prevSprite.scale.set(prevSprite.userData.baseScaleX, prevSprite.userData.baseScaleY, 1);
-                }
-            }
-            
-            hoveredNode = node;
-
-            if (node) {
-                const currentSprite = node.__threeObj;
-                if (currentSprite) {
-                    const colorStr = pastelColors[node.group % pastelColors.length];
-                    if (currentSprite.material.map) currentSprite.material.map.dispose(); // 메모리 해제
-                    currentSprite.material.map = getNodeTexture(node, colorStr, true);
-                    currentSprite.scale.set(
-                        currentSprite.userData.baseScaleX * HOVER_SCALE_FACTOR, 
-                        currentSprite.userData.baseScaleY * HOVER_SCALE_FACTOR, 
-                        1
-                    );
-                }
-                container.style.cursor = 'pointer';
+            (document.getElementById('graph-container'))
+            .graphData(graphData)
+            .nodeLabel(null)
+            .nodeColor(node => pastelColors[node.group % pastelColors.length])
+            .backgroundColor('#f5f0e6')
+            .enableNodeDrag(false)
+            .nodeThreeObject(node => {
+                const colorStr = pastelColors[node.group % pastelColors.length];
+                const isHovered = hoveredNode === node;
+                const material = new THREE.SpriteMaterial({
+                    map: getNodeTexture(node, colorStr, isHovered),
+                    transparent: true,
+                    depthWrite: false,
+                });
+                const sprite = new THREE.Sprite(material);
+                const canvasForTexture = getNodeTexture(node, colorStr, isHovered).image;
+                const spriteWidth = canvasForTexture.width;
+                const spriteHeight = canvasForTexture.height;
+                let scale = NODE_BASE_SCALE * (isHovered ? HOVER_SCALE_FACTOR : 1);
+                sprite.scale.set(spriteWidth * scale / 100, spriteHeight * scale / 100, 1);
+                sprite.userData = { node, baseScaleX: sprite.scale.x, baseScaleY: sprite.scale.y };
+                return sprite;
+            })
+            .onNodeHover(node => {
+                const container = document.getElementById('graph-container');
+                if (hoveredNode === node && node !== null) return;
                 
-                if (!isMobile) {
-                  tooltipElement.style.display = 'block';
-                  tooltipElement.innerHTML = node.name;
-                } else {
-                  tooltipElement.style.display = 'none';
+                if (hoveredNode) {
+                    const prevSprite = hoveredNode.__threeObj;
+                    if (prevSprite) {
+                        const colorStr = pastelColors[hoveredNode.group % pastelColors.length];
+                        if (prevSprite.material.map) prevSprite.material.map.dispose();
+                        prevSprite.material.map = getNodeTexture(hoveredNode, colorStr, false);
+                        prevSprite.scale.set(prevSprite.userData.baseScaleX, prevSprite.userData.baseScaleY, 1);
+                    }
                 }
+                
+                hoveredNode = node;
 
-            } else {
-                container.style.cursor = 'grab';
-                tooltipElement.style.display = 'none';
-            }
-            GFG.renderer().domElement.addEventListener('mousemove', onMouseMoveTooltip, false);
-          })
-          .onNodeClick(node => {
-  // 모바일 터치 상태 추적
-            if (isTouchZooming) {
-              return; // 줌 중일 때는 클릭 무시
-            }
+                if (node) {
+                    const currentSprite = node.__threeObj;
+                    if (currentSprite) {
+                        const colorStr = pastelColors[node.group % pastelColors.length];
+                        if (currentSprite.material.map) currentSprite.material.map.dispose();
+                        currentSprite.material.map = getNodeTexture(node, colorStr, true);
+                        currentSprite.scale.set(
+                            currentSprite.userData.baseScaleX * HOVER_SCALE_FACTOR, 
+                            currentSprite.userData.baseScaleY * HOVER_SCALE_FACTOR, 
+                            1
+                        );
+                    }
+                    container.style.cursor = 'pointer';
+                    if (!isMobile) {
+                        tooltipElement.style.display = 'block';
+                        tooltipElement.innerHTML = node.name;
+                    } else {
+                        tooltipElement.style.display = 'none';
+                    }
+                } else {
+                    container.style.cursor = 'grab';
+                    tooltipElement.style.display = 'none';
+                }
+                Graph.renderer().domElement.addEventListener('mousemove', onMouseMoveTooltip, false);
+            })
+            .onNodeClick(node => {
+                if (isTouchZooming) return;
+                if (node.url) window.open(node.url, '_blank');
+            })
+            .d3Force('charge', d3.forceManyBody().strength(-2).distanceMin(25).distanceMax(100))
+            .d3AlphaDecay(0.02)
+            .d3VelocityDecay(0.5); 
+
+        const cam = Graph.camera();
+        const controls = Graph.controls(); // 컨트롤 객체 가져오기
+        const zoomSlider = document.getElementById('zoom-slider');
+
+        const sliderMin = parseFloat(zoomSlider.min);
+        const sliderMax = parseFloat(zoomSlider.max);
+        // 슬라이더의 시각적 표현과 실제 카메라 거리를 매핑합니다.
+        // 슬라이더 값이 클수록 -> 카메라 거리가 가까워짐 (줌 인)
+        // 슬라이더 값이 작을수록 -> 카메라 거리가 멀어짐 (줌 아웃)
+        // controls.minDistance 와 controls.maxDistance 를 활용하여 실제 카메라 허용 범위와 일치시킴
+        // 이 함수들은 슬라이더 값과 실제 "카메라-타겟 간 거리"를 변환합니다.
+        function sliderToCameraDist(sliderValue) {
+            // 슬라이더 범위를 [0, 1]로 정규화
+            const normalizedSlider = (sliderValue - sliderMin) / (sliderMax - sliderMin);
+            // 카메라 거리 범위를 [minDistance, maxDistance]로 매핑 (슬라이더가 크면 거리가 작아짐)
+            return controls.maxDistance - normalizedSlider * (controls.maxDistance - controls.minDistance);
+        }
+
+        function cameraDistToSlider(cameraDist) {
+            // 카메라 거리를 [0, 1]로 정규화 (거리가 작을수록 0에 가까움)
+            const normalizedDist = (cameraDist - controls.minDistance) / (controls.maxDistance - controls.minDistance);
+            // 슬라이더 값으로 변환 (거리가 작을수록 슬라이더 값이 커짐)
+            return sliderMin + (1 - normalizedDist) * (sliderMax - sliderMin);
+        }
+        
+        // 초기 슬라이더 값 설정 (카메라 초기 위치 기반)
+        // Graph.cameraPosition({ z: 250 })으로 초기화되므로, 이 값을 사용
+        const initialCameraZ = 250; 
+        // controls.target은 기본적으로 (0,0,0)
+        const initialTarget = new THREE.Vector3(0,0,0); // Graph.controls().target 으로 가져오는게 더 정확
+        const initialDistance = new THREE.Vector3(0,0,initialCameraZ).distanceTo(initialTarget);
+        zoomSlider.value = cameraDistToSlider(initialDistance);
+
+
+        // 부드러운 카메라 줌 함수
+        function smoothZoomTo(targetSliderValue) {
+            const targetCameraDistance = sliderToCameraDist(targetSliderValue);
+            const duration = 300; // 애니메이션 지속 시간 (ms)
+            const lookAtTarget = controls.target; // 현재 카메라가 바라보는 지점
             
-            if (node.url) {
-              window.open(node.url, '_blank');
+            const startCameraDistance = cam.position.distanceTo(lookAtTarget);
+            const startTime = performance.now();
+
+            // 시작 시점, 타겟에서 카메라로 향하는 방향 벡터 (정규화)
+            let startDirectionToCamera;
+            if (startCameraDistance < 0.001) { // 카메라가 타겟과 매우 가까울 때
+                // 카메라가 타겟 위에 있다면, 기본 방향으로 (예: 타겟 뒤쪽)
+                startDirectionToCamera = new THREE.Vector3(0, 0, 1); 
+            } else {
+                startDirectionToCamera = new THREE.Vector3().subVectors(cam.position, lookAtTarget).normalize();
             }
-          })
 
-          // ★★★ D3 Force 시뮬레이션 설정 추가 ★★★
-          // 기본 척력 (charge) 힘 설정
-          .d3Force('charge', d3.forceManyBody()
-            .strength(-2) // 노드들을 서로 밀어내는 힘의 강도. 음수여야 척력입니다. 절대값이 클수록 강하게 밀어냅니다.
-            .distanceMin(25) // 이 거리(월드 유닛)보다 가까운 노드들만 척력이 적용됩니다.
-                             // 이 값을 조절하여 가까운 노드들이 흩어지는 정도를 제어합니다.
-                             // 현재 NODE_BASE_SCALE이 15이니 20정도가 적절한 시작점입니다.
-            .distanceMax(100) // 이 거리보다 먼 노드들 사이에는 척력이 적용되지 않습니다. (선택적)
-          )
-          // 시뮬레이션 멈추는 속도 조절
-          .d3AlphaDecay(0.02) // 0.1은 너무 빨라서 노드들이 충분히 흩어지지 않을 수 있습니다.
-                               // 0.02 ~ 0.05 사이의 낮은 값으로 설정하여 충분히 흩어지도록 합니다.
-          .d3VelocityDecay(0.5); 
+            function animate(time) {
+                const t = Math.min((time - startTime) / duration, 1);
+                const easedT = t * (2 - t); // easeOutQuad
 
-          const cam = Graph.camera();
-          const zoomSlider = document.getElementById('zoom-slider');
+                const currentCameraDistance = startCameraDistance + (targetCameraDistance - startCameraDistance) * easedT;
+                
+                // minDistance, maxDistance 범위 내로 거리 제한
+                const clampedDistance = Math.max(controls.minDistance, Math.min(controls.maxDistance, currentCameraDistance));
 
-          // 슬라이더 → 카메라 위치 반영
-          zoomSlider.addEventListener('input', () => {
-          const val = parseFloat(zoomSlider.value);
-          const targetDist = sliderToCameraDist(val);
-          cam.position.setZ(targetDist);
+                const newCamPos = new THREE.Vector3().copy(lookAtTarget).addScaledVector(startDirectionToCamera, clampedDistance);
+                
+                cam.position.copy(newCamPos);
+                // controls.update(); // TrackballControls의 경우 수동 업데이트 필요할 수 있음
+
+                const actualDistance = cam.position.distanceTo(lookAtTarget);
+                zoomSlider.value = cameraDistToSlider(actualDistance);
+
+                if (t < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    // 애니메이션 종료 후 최종값으로 정확히 설정
+                    const finalPos = new THREE.Vector3().copy(lookAtTarget).addScaledVector(startDirectionToCamera, targetCameraDistance);
+                    cam.position.copy(finalPos);
+                    // controls.update();
+                    zoomSlider.value = cameraDistToSlider(targetCameraDistance);
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+
+        document.getElementById('zoom-in').addEventListener('click', () => {
+            const currentSliderValue = parseFloat(zoomSlider.value);
+            // 슬라이더 값 증가는 줌인 (카메라 거리 감소)
+            const newSliderValue = Math.min(sliderMax, currentSliderValue + parseFloat(zoomSlider.step) * 5);
+            smoothZoomTo(newSliderValue);
         });
 
-          // 🔁 추가: 부드러운 카메라 이동 함수
-          function smoothZoomTo(sliderTargetValue) {
-  const targetDist = sliderToCameraDist(sliderTargetValue);
-  const duration = 400;
-  const startDist = cam.position.z;
-  const startTime = performance.now();
+        document.getElementById('zoom-out').addEventListener('click', () => {
+            const currentSliderValue = parseFloat(zoomSlider.value);
+            // 슬라이더 값 감소는 줌아웃 (카메라 거리 증가)
+            const newSliderValue = Math.max(sliderMin, currentSliderValue - parseFloat(zoomSlider.step) * 5);
+            smoothZoomTo(newSliderValue);
+        });
+        
+        // 슬라이더 직접 조작 시
+        zoomSlider.addEventListener('input', () => {
+            const sliderValue = parseFloat(zoomSlider.value);
+            const targetCameraDistance = sliderToCameraDist(sliderValue);
+            const lookAtTarget = controls.target;
+            const currentCamDistance = cam.position.distanceTo(lookAtTarget);
 
-  function animate(time) {
-    const t = Math.min((time - startTime) / duration, 1);
-    const eased = t * (2 - t); // easeOutQuad
-    const currentZ = startDist + (targetDist - startDist) * eased;
+            let directionToCamera;
+            if (currentCamDistance < 0.001) {
+                directionToCamera = new THREE.Vector3(0, 0, 1);
+            } else {
+                directionToCamera = new THREE.Vector3().subVectors(cam.position, lookAtTarget).normalize();
+            }
+            
+            // minDistance, maxDistance 범위 내로 거리 제한
+            const clampedDistance = Math.max(controls.minDistance, Math.min(controls.maxDistance, targetCameraDistance));
 
-    cam.position.setZ(currentZ);  // ← 여기만 z축 기준으로 고정
-    zoomSlider.value = cameraDistToSlider(currentZ); // 슬라이더와 동기화
+            const newCamPos = new THREE.Vector3().copy(lookAtTarget).addScaledVector(directionToCamera, clampedDistance);
+            cam.position.copy(newCamPos);
+            // controls.update();
+        });
 
-    if (t < 1) requestAnimationFrame(animate);
-  }
-
-  requestAnimationFrame(animate);
-}
-
-
-document.getElementById('zoom-in').addEventListener('click', () => {
-  const current = parseFloat(zoomSlider.value);
-  const newVal = Math.min(1500, current + 60 * 5); // 슬라이더 값은 커질수록 줌아웃!
-  smoothZoomTo(newVal);
-});
-
-document.getElementById('zoom-out').addEventListener('click', () => {
-  const current = parseFloat(zoomSlider.value);
-  const newVal = Math.max(50, current - 60 * 5);
-  smoothZoomTo(newVal);
-});
-
-
-const sliderMin = 50;
-const sliderMax = 1500;
-
-function sliderToCameraDist(sliderValue) {
-  return sliderMax - (sliderValue - sliderMin);
-}
-
-function cameraDistToSlider(cameraDist) {
-  return sliderMax - (cameraDist - sliderMin);
-}
-
-
-          function animateZoomSync() {
+        // 카메라 움직임(스크롤 줌 등)에 따라 슬라이더 동기화
+        function animateZoomSync() {
             requestAnimationFrame(animateZoomSync);
-            const dist = cam.position.length();
-            zoomSlider.value = cameraDistToSlider(dist);
-          }
-
-          animateZoomSync();
-
-
-        // 카메라 위치 설정 (이전과 동일)
-        Graph.cameraPosition({ z: 250 });
-        cam.position.set(0, 0, 250);
-        cam.lookAt(0, 0, 0);
-
-
-        Graph.renderer().domElement.addEventListener('contextmenu', function(event) {
-          event.preventDefault();
-        }, false);
-                const controls = Graph.controls();
-                console.log('🚨 controls type:', controls.constructor.name); // 이거!
-                console.log(controls);
-
-        if (controls && controls.mouseButtons) { // controls 객체가 OrbitControls와 유사한 속성을 가졌는지 확인
-          // 데스크탑 마우스 설정
-          controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE; // 좌클릭 회전 (기본값)
-          controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;  // 가운데 클릭 줌 (기본값)
-          controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;   // 우클릭 팬 (기본값)
-                                                        // 만약 우클릭을 회전으로 하고 싶다면:
-                                                        // controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
-
-          // 패닝 비활성화 (마우스 및 터치에 영향)
-          controls.noPan = true;
-          controls.rotateSpeed = isMobile ? 0.85 : 0.5;
-
-          // 줌 거리 제한
-          controls.minDistance = 50;
-          controls.maxDistance = 1500;
-
-
-
+            if (controls && controls.target) { // controls 객체 및 target 속성 확인
+                 const dist = cam.position.distanceTo(controls.target);
+                 // 슬라이더 업데이트 시 루프 방지를 위해 현재 값과 다를 때만 업데이트
+                 const newSliderValue = cameraDistToSlider(dist);
+                 if (Math.abs(parseFloat(zoomSlider.value) - newSliderValue) > 0.1) { // 약간의 오차 허용
+                    zoomSlider.value = newSliderValue;
+                 }
+            }
         }
+        animateZoomSync();
+
+        Graph.cameraPosition({ z: initialCameraZ }); // 초기 카메라 위치 설정
+        // cam.lookAt(0,0,0)은 controls가 관리
+
+        Graph.renderer().domElement.addEventListener('contextmenu', event => event.preventDefault(), false);
+        
+        console.log('🚨 controls type:', controls.constructor.name);
+        // console.log(controls);
+
+        if (controls && controls.mouseButtons) {
+            controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+            controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
+            controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE; // 우클릭 회전
+            controls.enablePan = false; // 패닝 비활성화 (noPan은 오래된 속성일 수 있음)
+            controls.rotateSpeed = isMobile ? 0.85 : 0.5;
+            controls.minDistance = 50;  // 최소 줌 거리
+            controls.maxDistance = 1500; // 최대 줌 거리
+        } else if (controls) { // TrackballControls 등 다른 컨트롤러의 경우
+            controls.noPan = true; // 패닝 비활성화
+            controls.rotateSpeed = isMobile ? 2.0 : 1.2; // TrackballControls는 rotateSpeed 스케일이 다름
+            controls.zoomSpeed = 1.2;
+            controls.minDistance = 50;
+            controls.maxDistance = 1500;
+            // TrackballControls는 mouseButtons 직접 설정 방식이 다름 (필요시 추가 설정)
+        }
+
 
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         Graph.scene().add(ambientLight);
@@ -486,42 +496,41 @@ function cameraDistToSlider(cameraDist) {
             }
         }
         
-              setTimeout(() => {
-          if (!isMobile) return; // 💡 데스크톱일 경우 자동 카메라 이동 끔
+        setTimeout(() => {
+            if (!isMobile) return; 
 
-          const { nodes: graphNodes } = Graph.graphData();
-          if (graphNodes.length) {
-              let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
-              graphNodes.forEach(n => {
-                  minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
-                  minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
-                  minZ = Math.min(minZ, n.z); maxZ = Math.max(maxZ, n.z);
-              });
+            const { nodes: graphNodes } = Graph.graphData();
+            if (graphNodes.length) {
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+                graphNodes.forEach(n => {
+                    minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
+                    minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
+                    minZ = Math.min(minZ, n.z); maxZ = Math.max(maxZ, n.z);
+                });
 
-              const centerX = (minX + maxX) / 2;
-              const centerY = (minY + maxY) / 2;
-              const centerZ = (minZ + maxZ) / 2;
-              const maxExtent = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
-              const camera = Graph.camera();
+                const centerX = (minX + maxX) / 2;
+                const centerY = (minY + maxY) / 2;
+                const centerZ = (minZ + maxZ) / 2;
+                
+                // 카메라 위치 및 바라보는 지점 설정
+                // 이 설정 후 controls.target은 (centerX, centerY, centerZ)가 됨
+                Graph.cameraPosition(
+                    { x: centerX, y: centerY, z: centerZ + 1500 }, // 카메라 위치
+                    { x: centerX, y: centerY, z: centerZ },      // 바라보는 지점 (lookAt)
+                    1000                                          // 전환 시간
+                );
+                // cameraPosition 호출 후 controls.target이 업데이트되므로, 슬라이더 값도 재조정 필요
+                setTimeout(() => {
+                    if (controls && controls.target) {
+                         const dist = cam.position.distanceTo(controls.target);
+                         zoomSlider.value = cameraDistToSlider(dist);
+                    }
+                }, 1100); // cameraPosition 애니메이션 시간보다 약간 길게
 
-              if (camera) {
-                  let camDistance = maxExtent / (2 * Math.tan(Math.PI * camera.fov / 360));
-                  camDistance = Math.max(camDistance, 100);
-                  camDistance = Math.min(camDistance, 2000);
-                  Graph.cameraPosition(
-                      { x: centerX, y: centerY, z: centerZ + 1500 },
-                      { x: centerX, y: centerY, z: centerZ },
-                      1000
-                  );
-              } else {
-                  console.warn("카메라 객체를 가져올 수 없어 자동 위치 조정을 생략합니다.");
-                  Graph.cameraPosition({ z: 400 + maxExtent });
-              }
-          } else {
-              Graph.cameraPosition({ x: 0, y: 0, z: 1500 });
-          }
-      }, 1000);
-
+            } else {
+                Graph.cameraPosition({ x: 0, y: 0, z: 1500 });
+            }
+        }, 1000);
 
         window.addEventListener('resize', () => {
             Graph.width(window.innerWidth);
